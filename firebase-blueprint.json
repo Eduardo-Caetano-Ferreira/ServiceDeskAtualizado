@@ -1,0 +1,20 @@
+{
+  "entities": {
+    "techniciansList": {
+      "type": "object",
+      "properties": {
+        "technicians": {
+          "type": "array"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "techniciansList": {
+      "schema": {
+        "$ref": "#/entities/techniciansList"
+      },
+      "description": "Technicians availability list"
+    }
+  }
+}

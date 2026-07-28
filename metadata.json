@@ -1,0 +1,6 @@
+{
+  "name": "ServiceDesk OS Generator",
+  "description": "App for managing service desk tasks and technician assignments.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -4,27 +4,20 @@ import { GoogleGenAI } from "@google/genai";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
 const app = express();
 app.use(express.json());
 
+function getApiKey() {
+  return (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || "").trim();
+}
+
 function getAi() {
-  const key = process.env.GEMINI_API_KEY;
+  const key = getApiKey();
   if (!key) {
-    throw new Error("GEMINI_API_KEY não configurada no ambiente do Vercel.");
+    throw new Error("A chave GEMINI_API_KEY não foi configurada no ambiente do Vercel.");
   }
   return new GoogleGenAI({
     apiKey: key,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
   });
 }
 
@@ -34,8 +27,12 @@ app.all("*", upload.single("image"), async (req: any, res: any) => {
       return res.status(400).json({ error: "Nenhuma imagem enviada." });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ error: "A chave GEMINI_API_KEY não está configurada nas variáveis de ambiente do Vercel." });
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      return res.status(500).json({ 
+        error: "A chave GEMINI_API_KEY não foi encontrada nas variáveis de ambiente do Vercel.",
+        details: "Você adicionou a chave no Vercel, mas precisa realizar um REDEPLOY no painel do Vercel (em Deployments > Redeploy) para que a nova variável de ambiente seja aplicada ao servidor." 
+      });
     }
 
     const mimeType = req.file.mimetype || "image/png";

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  User, Headset, Copy, Trash2, AlertTriangle, Info, MonitorPlay, Calendar, Settings
+  User, Headset, Copy, Trash2, AlertTriangle, Info, MonitorPlay, Calendar, Settings, Clock
 } from 'lucide-react';
 import { TechniciansRegion } from '../components/TechniciansRegion';
 
@@ -16,6 +16,10 @@ const initialState = {
   sinalFibra: '',
   dispositivoTV: '',
   sintoniaRealizada: 'Não',
+  recentOS: 'Não',
+  tipoOSRecente: '',
+  dataOSRecente: '',
+  encerramentoOSRecente: '',
   authException: 'Não',
   nomeAutorizou: '',
   nomeAtendente: '',
@@ -92,6 +96,12 @@ export function ReparoTV() {
         newErrors.push('sinalFibra');
     }
 
+    if (formData.recentOS === 'Sim') {
+      if (!formData.tipoOSRecente) newErrors.push('tipoOSRecente');
+      if (!formData.dataOSRecente) newErrors.push('dataOSRecente');
+      if (!formData.encerramentoOSRecente) newErrors.push('encerramentoOSRecente');
+    }
+
     if (formData.authException === 'Sim' && !formData.nomeAutorizou) {
         newErrors.push('nomeAutorizou');
     }
@@ -127,6 +137,11 @@ export function ReparoTV() {
         eqText += `\nSinal da Fibra: ${formData.sinalFibra}`;
     }
 
+    let scriptOSRecente = `Recente Suporte/OS: ${formData.recentOS}`;
+    if (formData.recentOS === 'Sim') {
+      scriptOSRecente += `\n   - Tipo: ${formData.tipoOSRecente}\n   - Data: ${formatDate(formData.dataOSRecente)}\n   - Encerramento: ${formData.encerramentoOSRecente}`;
+    }
+
     let scriptExcecao = `Autorização por Exceção: ${formData.authException}`;
     if (formData.authException === 'Sim') {
       scriptExcecao += ` (Autorizado por: ${formData.nomeAutorizou})`;
@@ -146,6 +161,9 @@ Descrição do Problema: ${formData.descricao}
 Equipamento: ${eqText}
 Dispositivo: ${formData.dispositivoTV}
 Sintonia Realizada? ${formData.sintoniaRealizada}
+
+=== HISTÓRICO ===
+${scriptOSRecente}
 
 === ATENDIMENTO ===
 Atendente: ${formData.nomeAtendente}
@@ -266,7 +284,7 @@ ${scriptExcecao}`.trim();
         </div>
 
         {/* Bloco 2: Detalhes do Reparo */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border-t-4 border-t-red-500 border-x border-b border-slate-200 lg:col-span-8 flex flex-col">
+        <div className="bg-white p-6 rounded-xl shadow-sm border-t-4 border-t-red-500 border-x border-b border-slate-200 lg:col-span-12 flex flex-col">
           <h2 className="text-lg font-bold border-b pb-3 mb-4 text-slate-700 flex items-center gap-2">
             <Settings className="w-5 h-5 text-red-500" /> 
             Detalhes do Reparo
@@ -354,8 +372,45 @@ ${scriptExcecao}`.trim();
           </div>
         </div>
 
+        {/* Última O.S. */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border-t-4 border-t-red-500 border-x border-b border-slate-200 lg:col-span-6 flex flex-col h-full">
+          <h2 className="text-lg font-bold border-b pb-3 mb-4 text-slate-700 flex items-center gap-2">
+            <Clock className="w-5 h-5 text-red-600" /> 
+            Última O.S.
+          </h2>
+          <div className="mb-4">
+            <span className="block text-sm font-semibold text-slate-700 mb-2">Teve atendimento recente?</span>
+            <div className="flex gap-4">
+              {['Sim', 'Não'].map(op => (
+                <label key={op} className="flex items-center gap-2 cursor-pointer bg-slate-50 px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors flex-1 justify-center">
+                  <input type="radio" name="recentOS" value={op} checked={formData.recentOS === op} onChange={handleChange} className="text-red-600 focus:ring-red-500" /> 
+                  <span className="font-semibold text-slate-700">{op}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <AnimatePresence>
+            {formData.recentOS === 'Sim' && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200 overflow-hidden">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Tipo *</label>
+                  <input type="text" name="tipoOSRecente" value={formData.tipoOSRecente} onChange={handleChange} className={inputClass('tipoOSRecente')} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Data *</label>
+                  <input type="date" name="dataOSRecente" value={formData.dataOSRecente} onChange={handleChange} className={inputClass('dataOSRecente')} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Encerramento *</label>
+                  <input type="text" name="encerramentoOSRecente" value={formData.encerramentoOSRecente} onChange={handleChange} className={inputClass('encerramentoOSRecente')} />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
         {/* Bloco 3: Detalhes do Atendimento */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border-t-4 border-t-red-500 border-x border-b border-slate-200 lg:col-span-4 flex flex-col h-full">
+        <div className="bg-white p-6 rounded-xl shadow-sm border-t-4 border-t-red-500 border-x border-b border-slate-200 lg:col-span-6 flex flex-col h-full">
           <h2 className="text-lg font-bold border-b pb-3 mb-4 text-slate-700 flex items-center gap-2">
             <Headset className="w-5 h-5 text-red-600" /> 
             Detalhes do Atendimento

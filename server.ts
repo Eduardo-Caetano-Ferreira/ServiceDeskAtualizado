@@ -8,18 +8,17 @@ import fs from "fs";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+function getApiKey() {
+  return (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || "").trim();
+}
+
 function getAi() {
-  const key = process.env.GEMINI_API_KEY;
+  const key = getApiKey();
   if (!key) {
     throw new Error("GEMINI_API_KEY não configurada.");
   }
   return new GoogleGenAI({
     apiKey: key,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
   });
 }
 

@@ -14,7 +14,6 @@ import {
   Sparkles
 } from 'lucide-react';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
-import { GoogleGenAI } from '@google/genai';
 import { db } from '../lib/firebase';
 
 export function Inicio() {
@@ -79,80 +78,6 @@ export function Inicio() {
     e.preventDefault();
   };
 
-  const processWithClientGemini = async (file, apiKey) => {
-    const ai = new GoogleGenAI({ apiKey });
-    const base64Data = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        const result = reader.result;
-        const base64 = typeof result === 'string' ? result.split(',')[1] : '';
-        resolve(base64);
-      };
-      reader.onerror = reject;
-    });
-
-    const prompt = `Analise esta imagem de uma escala/tabela de técnicos.
-Extraia os dados dos técnicos divididos em MOTO e CARRO.
-Retorne APENAS um objeto JSON no seguinte formato exato, sem textos explicativos adicionais ou marcações fora do JSON:
-
-{
-  "moto": [
-    {
-      "name": "Nome do Técnico",
-      "region": "Região/Setor",
-      "city": "Cidade",
-      "obs": "Observações (ex: horário, disponibilidade, restrições)"
-    }
-  ],
-  "car": [
-    {
-      "name": "Nome do Técnico",
-      "region": "Região/Setor",
-      "city": "Cidade",
-      "obs": "Observações"
-    }
-  ]
-}
-Se não encontrar dados de alguma categoria, retorne o array correspondente vazio [].`;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType: file.type || 'image/png',
-              },
-            },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: 'application/json'
-      }
-    });
-
-    let jsonStr = (response.text || '{}').trim();
-    jsonStr = jsonStr.replace(/^```(json)?/gi, '').replace(/```$/g, '').trim();
-
-    let extractedData = { moto: [], car: [] };
-    try {
-      extractedData = JSON.parse(jsonStr);
-    } catch {
-      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        extractedData = JSON.parse(jsonMatch[0]);
-      }
-    }
-
-    return extractedData;
-  };
-
   const handleUpload = async () => {
     if (!selectedFile) {
       setError("Por favor, selecione uma imagem de escala primeiro.");
@@ -162,41 +87,26 @@ Se não encontrar dados de alguma categoria, retorne o array correspondente vazi
     setIsUploading(true);
     setError(null);
 
-    let extractedData = null;
-    let backendSuccess = false;
+    const formData = new FormData();
+    formData.append('image', selectedFile);
 
     try {
-      // 1. Tenta via servidor (/api/extract-technicians)
-      try {
-        const formData = new FormData();
-        formData.append('image', selectedFile);
+      const response = await fetch('/api/extract-technicians', {
+        method: 'POST',
+        body: formData,
+      });
 
-        const response = await fetch('/api/extract-technicians', {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (response.ok) {
-          extractedData = await response.json();
-          backendSuccess = true;
-        }
-      } catch {
-        // Se a chamada de API falhar, cai para o fallback do cliente
+      if (!response.ok) {
+        const errData = await response.json();
+        const msg = errData.details ? `${errData.error} (${errData.details})` : (errData.error || "Falha ao processar a imagem");
+        throw new Error(msg);
       }
 
-      // 2. Fallback direto no cliente
-      if (!backendSuccess) {
-        const clientApiKey = import.meta.env.VITE_GEMINI_API_KEY || localStorage.getItem('GEMINI_API_KEY');
-        if (!clientApiKey) {
-          throw new Error("A chave da API GEMINI_API_KEY não foi configurada.");
-        }
-
-        extractedData = await processWithClientGemini(selectedFile, clientApiKey);
-      }
+      const extractedData = await response.json();
 
       const sanitizedData = {
-        moto: Array.isArray(extractedData?.moto) ? extractedData.moto : [],
-        car: Array.isArray(extractedData?.car) ? extractedData.car : []
+        moto: Array.isArray(extractedData.moto) ? extractedData.moto : [],
+        car: Array.isArray(extractedData.car) ? extractedData.car : []
       };
 
       // Save extracted data to Firestore including updatedAt timestamp
@@ -209,12 +119,11 @@ Se não encontrar dados de alguma categoria, retorne o array correspondente vazi
       setPreviewUrl(null);
     } catch (err) {
       console.error(err);
-      setError(err.message || "Erro ao processar a imagem.");
+      setError(err.message || "Erro ao conectar com o servidor.");
     } finally {
       setIsUploading(false);
     }
   };
-
 
   // Filter helper
   const filterList = (list) => {
@@ -541,7 +450,6 @@ Se não encontrar dados de alguma categoria, retorne o array correspondente vazi
           </div>
         </div>
       </div>
-
     </motion.div>
   );
 }

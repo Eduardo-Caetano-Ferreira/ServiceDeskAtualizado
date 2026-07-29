@@ -78,6 +78,61 @@ export function Inicio() {
     e.preventDefault();
   };
 
+  // Helper to compress image before uploading (prevents Vercel 4.5MB payload limit issues)
+  const compressImageIfNeeded = async (file) => {
+    return new Promise((resolve) => {
+      if (file.size < 1.5 * 1024 * 1024) {
+        return resolve(file); // Already small enough
+      }
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1800;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(file);
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return resolve(file);
+            const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          },
+          'image/jpeg',
+          0.85
+        );
+      };
+      img.onerror = () => resolve(file);
+      img.src = url;
+    });
+  };
+
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (error) => reject(error);
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleUpload = async () => {
     if (!selectedFile) {
       setError("Por favor, selecione uma imagem de escala primeiro.");
@@ -87,22 +142,39 @@ export function Inicio() {
     setIsUploading(true);
     setError(null);
 
-    const formData = new FormData();
-    formData.append('image', selectedFile);
-
     try {
+      const fileToUpload = await compressImageIfNeeded(selectedFile);
+      const base64Data = await fileToBase64(fileToUpload);
+
       const response = await fetch('/api/extract-technicians', {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image: base64Data,
+          mimeType: fileToUpload.type || 'image/jpeg',
+        }),
       });
 
-      if (!response.ok) {
-        const errData = await response.json();
-        const msg = errData.details ? `${errData.error} (${errData.details})` : (errData.error || "Falha ao processar a imagem");
-        throw new Error(msg);
+      const responseText = await response.text();
+      let extractedData;
+      try {
+        extractedData = JSON.parse(responseText);
+      } catch {
+        throw new Error(
+          responseText.length < 250 && responseText.trim()
+            ? responseText.trim()
+            : `Erro no servidor Vercel (${response.status} ${response.statusText}). Certifique-se de que a variável GEMINI_API_KEY foi adicionada nas configurações do Vercel e que você fez um REDEPLOY do projeto.`
+        );
       }
 
-      const extractedData = await response.json();
+      if (!response.ok) {
+        const msg = extractedData.details 
+          ? `${extractedData.error} (${extractedData.details})` 
+          : (extractedData.error || "Falha ao processar a imagem");
+        throw new Error(msg);
+      }
 
       const sanitizedData = {
         moto: Array.isArray(extractedData.moto) ? extractedData.moto : [],

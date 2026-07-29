@@ -26,20 +26,29 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '20mb' }));
 
   app.post("/api/extract-technicians", upload.single("image"), async (req, res) => {
     try {
-      if (!req.file) {
+      let base64Data = "";
+      let mimeType = "image/png";
+
+      if (req.body && req.body.image) {
+        base64Data = req.body.image.replace(/^data:image\/\w+;base64,/, "");
+        if (req.body.mimeType) mimeType = req.body.mimeType;
+      } else if (req.file) {
+        mimeType = req.file.mimetype || "image/png";
+        base64Data = req.file.buffer.toString("base64");
+      }
+
+      if (!base64Data) {
         return res.status(400).json({ error: "Nenhuma imagem enviada." });
       }
 
-      if (!process.env.GEMINI_API_KEY) {
-         return res.status(500).json({ error: "A chave da API do Gemini não está configurada." });
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        return res.status(500).json({ error: "A chave da API do Gemini não está configurada." });
       }
-
-      const mimeType = req.file.mimetype || "image/png";
-      const base64Data = req.file.buffer.toString("base64");
 
       const prompt = `Analise esta imagem de uma escala/tabela de técnicos.
 Extraia os dados dos técnicos divididos em MOTO e CARRO.

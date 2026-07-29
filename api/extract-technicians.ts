@@ -1,42 +1,48 @@
-import express from "express";
-import multer from "multer";
 import { GoogleGenAI } from "@google/genai";
-
-const upload = multer({ storage: multer.memoryStorage() });
-
-const app = express();
-app.use(express.json());
 
 function getApiKey() {
   return (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || "").trim();
 }
 
-function getAi() {
-  const key = getApiKey();
-  if (!key) {
-    throw new Error("A chave GEMINI_API_KEY não foi configurada no ambiente do Vercel.");
+export default async function handler(req: any, res: any) {
+  res.setHeader('Content-Type', 'application/json');
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: "Método não permitido." });
   }
-  return new GoogleGenAI({
-    apiKey: key,
-  });
-}
 
-app.all("*", upload.single("image"), async (req: any, res: any) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: "Nenhuma imagem enviada." });
-    }
-
     const apiKey = getApiKey();
     if (!apiKey) {
       return res.status(500).json({ 
         error: "A chave GEMINI_API_KEY não foi encontrada nas variáveis de ambiente do Vercel.",
-        details: "Você adicionou a chave no Vercel, mas precisa realizar um REDEPLOY no painel do Vercel (em Deployments > Redeploy) para que a nova variável de ambiente seja aplicada ao servidor." 
+        details: "Certifique-se de ter adicionado GEMINI_API_KEY nas Environment Variables do Vercel e realizado um REDEPLOY." 
       });
     }
 
-    const mimeType = req.file.mimetype || "image/png";
-    const base64Data = req.file.buffer.toString("base64");
+    let base64Data = "";
+    let mimeType = "image/jpeg";
+
+    if (req.body && typeof req.body === 'object' && req.body.image) {
+      base64Data = req.body.image.replace(/^data:image\/\w+;base64,/, "");
+      if (req.body.mimeType) {
+        mimeType = req.body.mimeType;
+      }
+    } else if (typeof req.body === 'string') {
+      try {
+        const parsed = JSON.parse(req.body);
+        if (parsed.image) {
+          base64Data = parsed.image.replace(/^data:image\/\w+;base64,/, "");
+          if (parsed.mimeType) mimeType = parsed.mimeType;
+        }
+      } catch (e) {
+        console.error("Erro ao analisar body da requisição:", e);
+      }
+    }
+
+    if (!base64Data) {
+      return res.status(400).json({ error: "Nenhuma imagem enviada no corpo da requisição." });
+    }
 
     const prompt = `Analise esta imagem de uma escala/tabela de técnicos.
 Extraia os dados dos técnicos divididos em MOTO e CARRO.
@@ -62,9 +68,9 @@ Retorne APENAS um objeto JSON no seguinte formato exato, sem textos explicativos
 }
 Se não encontrar dados de alguma categoria, retorne o array correspondente vazio [].`;
 
-    const aiClient = getAi();
-    const response = await aiClient.models.generateContent({
-      model: "gemini-3.6-flash",
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
       contents: [
         {
           role: "user",
@@ -106,11 +112,12 @@ Se não encontrar dados de alguma categoria, retorne o array correspondente vazi
       }
     }
 
-    res.json(data);
+    return res.status(200).json(data);
   } catch (error: any) {
     console.error("Erro na extração:", error);
-    res.status(500).json({ error: "Falha ao processar a imagem.", details: error.message || String(error) });
+    return res.status(500).json({ 
+      error: "Falha ao processar a imagem.", 
+      details: error.message || String(error) 
+    });
   }
-});
-
-export default app;
+}

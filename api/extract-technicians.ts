@@ -70,7 +70,7 @@ Se não encontrar dados de alguma categoria, retorne o array correspondente vazi
 
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.6-flash",
       contents: [
         {
           role: "user",

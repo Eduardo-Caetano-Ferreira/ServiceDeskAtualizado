@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  User, Headset, Copy, Trash2, AlertTriangle, Info, MonitorPlay, Calendar, Settings, Clock
+  User, Headset, Copy, Trash2, AlertTriangle, Info, MonitorPlay, Calendar, Settings, Clock, Check
 } from 'lucide-react';
 import { TechniciansRegion } from '../components/TechniciansRegion';
 
@@ -10,6 +10,7 @@ const initialState = {
   periodo: '',
   horarioApos: '',
   contato: '',
+  conseguiuContato: 'Sim',
   clienteDesde: '',
   descricao: '',
   equipamentoTV: 'Coaxial',
@@ -49,6 +50,7 @@ export function ReparoTV() {
   const [toast, setToast] = useState(null);
   const [showClearModal, setShowClearModal] = useState(false);
   const [errorFields, setErrorFields] = useState([]);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('reparoTvScriptData', JSON.stringify(formData));
@@ -172,7 +174,7 @@ DATA: ${dataAgend}
 PERÍODO: ${periodoFmt}
 
 === INFORMAÇÕES DO CLIENTE ===
-Contato: ${formData.contato}
+Contato: ${formData.contato} (Conseguiu contato: ${formData.conseguiuContato || 'Sim'})
 Cliente desde: ${formData.clienteDesde}
 
 === DETALHES DO REPARO ===
@@ -190,7 +192,11 @@ Atendente: ${formData.nomeAtendente}
 ${scriptExcecao}`.trim();
 
     navigator.clipboard.writeText(scriptFinal)
-      .then(() => showToast("Script copiado com sucesso!"))
+      .then(() => {
+        setCopied(true);
+        showToast("Script copiado com sucesso!");
+        setTimeout(() => setCopied(false), 2500);
+      })
       .catch(() => showToast("Erro ao copiar script", "error"));
   };
 
@@ -300,6 +306,18 @@ ${scriptExcecao}`.trim();
                 placeholder="(XX) XXXXX-XXXX"
                 className={inputClass('contato')} 
               />
+              <div className="mt-2">
+                <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer select-none bg-slate-50 border border-slate-200 hover:bg-slate-100 px-2.5 py-1.5 rounded-lg transition-colors">
+                  <input
+                    type="checkbox"
+                    name="conseguiuContato"
+                    checked={formData.conseguiuContato !== 'Não'}
+                    onChange={(e) => setFormData(prev => ({ ...prev, conseguiuContato: e.target.checked ? 'Sim' : 'Não' }))}
+                    className="w-4 h-4 text-red-600 focus:ring-red-500 accent-red-600 rounded cursor-pointer"
+                  />
+                  <span>Conseguiu contato? <strong className={formData.conseguiuContato !== 'Não' ? 'text-emerald-600' : 'text-amber-600'}>{formData.conseguiuContato !== 'Não' ? 'Sim' : 'Não'}</strong></span>
+                </label>
+              </div>
             </div>
             
             <div>
@@ -509,13 +527,44 @@ ${scriptExcecao}`.trim();
 
         {/* Botões de Ação */}
         <div className="lg:col-span-12 flex flex-col sm:flex-row gap-4 pt-4 pb-10">
-          <button 
+          <motion.button 
             type="button" 
             onClick={copyScript}
-            className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-4 px-6 rounded-xl shadow-md flex justify-center items-center gap-3 transition transform hover:scale-[1.01]"
+            whileTap={{ scale: 0.97 }}
+            animate={copied ? { scale: [1, 1.03, 1] } : {}}
+            transition={{ duration: 0.3 }}
+            className={`flex-1 font-bold py-4 px-6 rounded-xl shadow-md flex justify-center items-center gap-3 transition-all duration-300 transform ${
+              copied 
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400/50' 
+                : 'bg-red-600 hover:bg-red-700 text-white'
+            }`}
           >
-            <Copy size={20} /> Copiar Script de Reparo
-          </button>
+            <AnimatePresence mode="wait">
+              {copied ? (
+                <motion.span
+                  key="copied"
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.5, opacity: 0 }}
+                  className="flex items-center gap-2"
+                >
+                  <Check size={22} className="animate-bounce text-white" />
+                  Script Copiado!
+                </motion.span>
+              ) : (
+                <motion.span
+                  key="copy"
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.5, opacity: 0 }}
+                  className="flex items-center gap-2"
+                >
+                  <Copy size={20} />
+                  Copiar Script de Reparo
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.button>
           
           <button 
             type="button" 

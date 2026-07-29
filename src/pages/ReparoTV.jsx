@@ -122,8 +122,28 @@ export function ReparoTV() {
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
-    const [year, month, day] = dateString.split('-');
+    const trimmed = dateString.trim();
+    if (trimmed.includes('/')) return trimmed;
+    const parts = trimmed.split('-');
+    if (parts.length === 3) {
+      if (parts[0].length === 4) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      if (parts[2].length === 4) return `${parts[0]}/${parts[1]}/${parts[2]}`;
+    }
+    return trimmed;
+  };
+
+  const getTodayFormatted = () => {
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const year = today.getFullYear();
     return `${day}/${month}/${year}`;
+  };
+
+  const setTodayDate = (fieldName) => {
+    const todayStr = getTodayFormatted();
+    setFormData(prev => ({ ...prev, [fieldName]: todayStr }));
+    setErrorFields(prev => prev.filter(field => field !== fieldName));
   };
 
   const copyScript = () => {
@@ -205,10 +225,14 @@ ${scriptExcecao}`.trim();
           </div>
           Reparo de TV
         </h2>
-        <div className="hidden sm:flex items-center gap-2 text-sm text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-          <Calendar className="w-4 h-4" />
-          {new Date().toLocaleDateString('pt-BR')}
-        </div>
+        <button
+          type="button"
+          onClick={() => setTodayDate('dataAgendamento')}
+          title="Clique para preencher a data de agendamento com a data de hoje"
+          className="flex items-center gap-2 text-sm text-slate-700 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer transition-colors font-semibold"
+        >
+          <Calendar className="w-4 h-4 text-red-600" /> Hoje ({getTodayFormatted()})
+        </button>
       </div>
 
       {/* TÉCNICOS DA REGIÃO (ROTA DIÁRIA) */}
@@ -224,8 +248,17 @@ ${scriptExcecao}`.trim();
           </h2>
           <div className="space-y-4 flex-grow">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Data *</label>
-              <input type="date" name="dataAgendamento" value={formData.dataAgendamento} onChange={handleChange} className={inputClass('dataAgendamento')} />
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-semibold text-slate-700">Data *</label>
+                <button
+                  type="button"
+                  onClick={() => setTodayDate('dataAgendamento')}
+                  className="text-xs text-red-600 font-semibold hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  Hoje
+                </button>
+              </div>
+              <input type="text" name="dataAgendamento" value={formData.dataAgendamento} onChange={handleChange} placeholder="DD/MM/AAAA" className={inputClass('dataAgendamento')} />
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Período *</label>
@@ -391,18 +424,34 @@ ${scriptExcecao}`.trim();
           </div>
           <AnimatePresence>
             {formData.recentOS === 'Sim' && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200 overflow-hidden">
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200 overflow-hidden">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Tipo *</label>
                   <input type="text" name="tipoOSRecente" value={formData.tipoOSRecente} onChange={handleChange} className={inputClass('tipoOSRecente')} />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Data *</label>
-                  <input type="date" name="dataOSRecente" value={formData.dataOSRecente} onChange={handleChange} className={inputClass('dataOSRecente')} />
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-sm font-semibold text-slate-700">Data *</label>
+                    <button
+                      type="button"
+                      onClick={() => setTodayDate('dataOSRecente')}
+                      className="text-xs text-red-600 font-semibold hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      Hoje
+                    </button>
+                  </div>
+                  <input type="text" name="dataOSRecente" value={formData.dataOSRecente} onChange={handleChange} placeholder="DD/MM/AAAA" className={inputClass('dataOSRecente')} />
                 </div>
-                <div>
+                <div className="sm:col-span-2">
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Encerramento *</label>
-                  <input type="text" name="encerramentoOSRecente" value={formData.encerramentoOSRecente} onChange={handleChange} className={inputClass('encerramentoOSRecente')} />
+                  <textarea
+                    name="encerramentoOSRecente"
+                    value={formData.encerramentoOSRecente}
+                    onChange={handleChange}
+                    rows={3}
+                    placeholder="Digite ou cole o encerramento da última O.S..."
+                    className={`${inputClass('encerramentoOSRecente')} resize-y`}
+                  />
                 </div>
               </motion.div>
             )}

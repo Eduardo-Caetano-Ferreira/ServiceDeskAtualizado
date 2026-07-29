@@ -91,8 +91,28 @@ export function PontoAdicional() {
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
-    const [year, month, day] = dateString.split('-');
+    const trimmed = dateString.trim();
+    if (trimmed.includes('/')) return trimmed;
+    const parts = trimmed.split('-');
+    if (parts.length === 3) {
+      if (parts[0].length === 4) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      if (parts[2].length === 4) return `${parts[0]}/${parts[1]}/${parts[2]}`;
+    }
+    return trimmed;
+  };
+
+  const getTodayFormatted = () => {
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const year = today.getFullYear();
     return `${day}/${month}/${year}`;
+  };
+
+  const setTodayDate = (fieldName) => {
+    const todayStr = getTodayFormatted();
+    setFormData(prev => ({ ...prev, [fieldName]: todayStr }));
+    setErrorFields(prev => prev.filter(field => field !== fieldName));
   };
 
   const validateForm = () => {
@@ -234,10 +254,14 @@ Atendente: ${formData.nomeAtendente}
           </div>
           O.S. Ponto Adicional / Cabear Dispositivo
         </h2>
-        <div className="hidden sm:flex items-center gap-2 text-sm text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-          <Calendar className="w-4 h-4" />
-          {new Date().toLocaleDateString('pt-BR')}
-        </div>
+        <button
+          type="button"
+          onClick={() => setTodayDate('dataAgendamento')}
+          title="Clique para preencher a data de agendamento com a data de hoje"
+          className="flex items-center gap-2 text-sm text-slate-700 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer transition-colors font-semibold"
+        >
+          <Calendar className="w-4 h-4 text-red-600" /> Hoje ({getTodayFormatted()})
+        </button>
       </div>
 
       {/* TÉCNICOS DA REGIÃO (ROTA DIÁRIA) */}
@@ -253,12 +277,22 @@ Atendente: ${formData.nomeAtendente}
           </h2>
           <div className="space-y-4 flex-grow">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Data de Agendamento *</label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-semibold text-slate-700">Data de Agendamento *</label>
+                <button
+                  type="button"
+                  onClick={() => setTodayDate('dataAgendamento')}
+                  className="text-xs text-red-600 font-semibold hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  Hoje
+                </button>
+              </div>
               <input 
-                type="date" 
+                type="text" 
                 name="dataAgendamento" 
                 value={formData.dataAgendamento}
                 onChange={handleChange}
+                placeholder="DD/MM/AAAA"
                 className={inputClass('dataAgendamento')} 
               />
             </div>
@@ -508,12 +542,22 @@ Atendente: ${formData.nomeAtendente}
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-1">Vencimento *</label>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="block text-sm font-semibold text-slate-700">Vencimento *</label>
+                        <button
+                          type="button"
+                          onClick={() => setTodayDate('vencimentoCusto')}
+                          className="text-xs text-red-600 font-semibold hover:underline cursor-pointer flex items-center gap-1"
+                        >
+                          Hoje
+                        </button>
+                      </div>
                       <input 
-                        type="date" 
+                        type="text" 
                         name="vencimentoCusto"
                         value={formData.vencimentoCusto}
                         onChange={handleChange}
+                        placeholder="DD/MM/AAAA"
                         className={inputClass('vencimentoCusto')} 
                       />
                     </div>

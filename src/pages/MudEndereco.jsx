@@ -62,8 +62,28 @@ export function MudEndereco() {
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
-    const [year, month, day] = dateString.split('-');
+    const trimmed = dateString.trim();
+    if (trimmed.includes('/')) return trimmed;
+    const parts = trimmed.split('-');
+    if (parts.length === 3) {
+      if (parts[0].length === 4) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      if (parts[2].length === 4) return `${parts[0]}/${parts[1]}/${parts[2]}`;
+    }
+    return trimmed;
+  };
+
+  const getTodayFormatted = () => {
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const year = today.getFullYear();
     return `${day}/${month}/${year}`;
+  };
+
+  const setTodayDate = (fieldName) => {
+    const todayStr = getTodayFormatted();
+    setFormData(prev => ({ ...prev, [fieldName]: todayStr }));
+    setErrorFields(prev => prev.filter(field => field !== fieldName));
   };
 
   const validateForm = () => {
@@ -161,9 +181,14 @@ Atendente: ${formData.nomeAtendente}`.trim();
     >
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold text-slate-800">Mudança de Endereço</h2>
-        <span className="text-xs font-semibold text-slate-600 bg-white px-3 py-1.5 rounded-full border border-slate-300 flex items-center gap-2 shadow-sm">
-          <CalendarDays size={14} className="text-primary" /> Hoje
-        </span>
+        <button
+          type="button"
+          onClick={() => setTodayDate('dataAgendamento')}
+          title="Clique para preencher a data de agendamento com a data de hoje"
+          className="text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 active:bg-slate-100 px-3 py-1.5 rounded-full border border-slate-300 flex items-center gap-2 shadow-sm cursor-pointer transition-colors"
+        >
+          <CalendarDays size={14} className="text-primary" /> Hoje ({getTodayFormatted()})
+        </button>
       </div>
 
       {/* TÉCNICOS DA REGIÃO (ROTA DIÁRIA) */}
@@ -195,8 +220,17 @@ Atendente: ${formData.nomeAtendente}`.trim();
               </div>
             </div>
             <div>
-              <label className={labelClass}>Data de Agendamento</label>
-              <input type="date" name="dataAgendamento" value={formData.dataAgendamento} onChange={handleChange} className={getInputClass('dataAgendamento')} />
+              <div className="flex justify-between items-center mb-1.5">
+                <label className={labelClass}>Data de Agendamento</label>
+                <button
+                  type="button"
+                  onClick={() => setTodayDate('dataAgendamento')}
+                  className="text-xs text-primary font-semibold hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  Hoje
+                </button>
+              </div>
+              <input type="text" name="dataAgendamento" value={formData.dataAgendamento} onChange={handleChange} placeholder="DD/MM/AAAA" className={getInputClass('dataAgendamento')} />
             </div>
           </div>
 

@@ -5,6 +5,7 @@ import {
   ShieldCheck, Copy, Trash2, AlertTriangle, Info, Check
 } from 'lucide-react';
 import { TechniciansRegion } from '../components/TechniciansRegion';
+import { DateInputWithCalendar } from '../components/DateInputWithCalendar';
 
 const initialState = {
   podeAdiantar: 'Não',
@@ -234,7 +235,7 @@ Atendente: ${formData.nomeAtendente}`.trim();
                   Hoje
                 </button>
               </div>
-              <input type="text" name="dataAgendamento" value={formData.dataAgendamento} onChange={handleChange} placeholder="DD/MM/AAAA" className={getInputClass('dataAgendamento')} />
+              <DateInputWithCalendar name="dataAgendamento" value={formData.dataAgendamento} onChange={handleChange} placeholder="DD/MM/AAAA" className={getInputClass('dataAgendamento')} />
             </div>
           </div>
 

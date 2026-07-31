@@ -5,6 +5,7 @@ import {
   ShieldCheck, Copy, Trash2, Info, Check
 } from 'lucide-react';
 import { TechniciansRegion } from '../components/TechniciansRegion';
+import { DateInputWithCalendar } from '../components/DateInputWithCalendar';
 
 const initialState = {
   dataAgendamento: '',
@@ -257,7 +258,7 @@ ${scriptExcecao}`.trim();
                   Hoje
                 </button>
               </div>
-              <input type="text" name="dataAgendamento" value={formData.dataAgendamento} onChange={handleChange} placeholder="DD/MM/AAAA" className={getInputClass('dataAgendamento')} />
+              <DateInputWithCalendar name="dataAgendamento" value={formData.dataAgendamento} onChange={handleChange} placeholder="DD/MM/AAAA" className={getInputClass('dataAgendamento')} />
             </div>
             <div>
               <label className={labelClass}>Período</label>
@@ -380,7 +381,7 @@ ${scriptExcecao}`.trim();
                       Hoje
                     </button>
                   </div>
-                  <input type="text" name="dataOSRecente" value={formData.dataOSRecente} onChange={handleChange} placeholder="DD/MM/AAAA" className={getInputClass('dataOSRecente')} />
+                  <DateInputWithCalendar name="dataOSRecente" value={formData.dataOSRecente} onChange={handleChange} placeholder="DD/MM/AAAA" className={getInputClass('dataOSRecente')} />
                 </div>
                 <div className="sm:col-span-2">
                   <label className={labelClass}>Encerramento</label>

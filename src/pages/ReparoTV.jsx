@@ -4,6 +4,7 @@ import {
   User, Headset, Copy, Trash2, AlertTriangle, Info, MonitorPlay, Calendar, Settings, Clock, Check
 } from 'lucide-react';
 import { TechniciansRegion } from '../components/TechniciansRegion';
+import { DateInputWithCalendar } from '../components/DateInputWithCalendar';
 
 const initialState = {
   dataAgendamento: '',
@@ -264,7 +265,7 @@ ${scriptExcecao}`.trim();
                   Hoje
                 </button>
               </div>
-              <input type="text" name="dataAgendamento" value={formData.dataAgendamento} onChange={handleChange} placeholder="DD/MM/AAAA" className={inputClass('dataAgendamento')} />
+              <DateInputWithCalendar name="dataAgendamento" value={formData.dataAgendamento} onChange={handleChange} placeholder="DD/MM/AAAA" className={inputClass('dataAgendamento')} />
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Período *</label>
@@ -458,7 +459,7 @@ ${scriptExcecao}`.trim();
                       Hoje
                     </button>
                   </div>
-                  <input type="text" name="dataOSRecente" value={formData.dataOSRecente} onChange={handleChange} placeholder="DD/MM/AAAA" className={inputClass('dataOSRecente')} />
+                  <DateInputWithCalendar name="dataOSRecente" value={formData.dataOSRecente} onChange={handleChange} placeholder="DD/MM/AAAA" className={inputClass('dataOSRecente')} />
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Encerramento *</label>

@@ -24,16 +24,16 @@ export default async function handler(req: any, res: any) {
     let mimeType = "image/jpeg";
 
     if (req.body && typeof req.body === 'object' && req.body.image) {
-      base64Data = req.body.image.replace(/^data:image\/\w+;base64,/, "");
+      base64Data = req.body.image.replace(/^data:[^;]+;base64,/, "").trim();
       if (req.body.mimeType) {
-        mimeType = req.body.mimeType;
+        mimeType = String(req.body.mimeType).split(';')[0].trim();
       }
     } else if (typeof req.body === 'string') {
       try {
         const parsed = JSON.parse(req.body);
         if (parsed.image) {
-          base64Data = parsed.image.replace(/^data:image\/\w+;base64,/, "");
-          if (parsed.mimeType) mimeType = parsed.mimeType;
+          base64Data = parsed.image.replace(/^data:[^;]+;base64,/, "").trim();
+          if (parsed.mimeType) mimeType = String(parsed.mimeType).split(';')[0].trim();
         }
       } catch (e) {
         console.error("Erro ao analisar body da requisição:", e);
@@ -44,54 +44,92 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: "Nenhuma imagem enviada no corpo da requisição." });
     }
 
-    const prompt = `Analise esta imagem de uma escala/tabela de técnicos.
-Extraia os dados dos técnicos divididos em MOTO e CARRO.
-Retorne APENAS um objeto JSON no seguinte formato exato, sem textos explicativos adicionais ou marcações fora do JSON:
+    const prompt = `Analise detalhadamente esta imagem de uma escala/tabela de técnicos.
+Extraia todos os técnicos organizados em duas listas: MOTO e CARRO.
+Para cada técnico identificado, extraia:
+- name: Nome completo ou identificação do técnico
+- region: Região, setor ou rota atendida
+- city: Cidade ou localidade
+- obs: Observações (horário, restrições, disponibilidade, telefone, avisos adicionais)
 
+Retorne EXCLUSIVAMENTE um objeto JSON no formato abaixo, sem formatação markdown ou texto ao redor:
 {
   "moto": [
     {
-      "name": "Nome do Técnico",
+      "name": "Nome",
       "region": "Região/Setor",
       "city": "Cidade",
-      "obs": "Observações (ex: horário, disponibilidade, restrições)"
+      "obs": "Observações"
     }
   ],
   "car": [
     {
-      "name": "Nome do Técnico",
+      "name": "Nome",
       "region": "Região/Setor",
       "city": "Cidade",
       "obs": "Observações"
     }
   ]
 }
-Se não encontrar dados de alguma categoria, retorne o array correspondente vazio [].`;
+Se uma categoria não tiver técnicos, retorne o array vazio [].`;
 
     const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: prompt },
+    const modelsToTry = [
+      "gemini-3.5-flash",
+      "gemini-3.5-flash-lite",
+      "gemini-3.8-flash",
+      "gemini-3.1-flash-lite",
+      "gemini-flash-lite-latest"
+    ];
+    let response: any = null;
+    let lastError: any = null;
+
+    for (const modelName of modelsToTry) {
+      try {
+        response = await ai.models.generateContent({
+          model: modelName,
+          contents: [
             {
-              inlineData: {
-                data: base64Data,
-                mimeType: mimeType,
-              },
+              role: "user",
+              parts: [
+                { text: prompt },
+                {
+                  inlineData: {
+                    data: base64Data,
+                    mimeType: mimeType,
+                  },
+                },
+              ],
             },
           ],
-        },
-      ],
-      config: {
-        responseMimeType: "application/json"
+          config: {
+            responseMimeType: "application/json"
+          }
+        });
+        if (response && response.text) {
+          console.log(`Endpoint Vercel: Sucesso com ${modelName}`);
+          break;
+        }
+      } catch (modelErr: any) {
+        lastError = modelErr;
+        console.warn(`Vercel endpoint: modelo ${modelName} falhou:`, modelErr?.message || modelErr);
+        await new Promise((r) => setTimeout(r, 600));
       }
-    });
+    }
+
+    if (!response || !response.text) {
+      let cleanErrorMsg = "Os servidores de processamento de imagem estão com alta demanda temporária. Por favor, aguarde alguns instantes e tente novamente.";
+      if (lastError?.message && !lastError.message.includes("503") && !lastError.message.includes("high demand")) {
+        cleanErrorMsg = lastError.message;
+      }
+      return res.status(503).json({
+        error: "Servidores temporariamente ocupados",
+        details: cleanErrorMsg
+      });
+    }
 
     let jsonStr = (response.text || "{}").trim();
-    jsonStr = jsonStr.replace(/^```(json)?/gi, "").replace(/```$/g, "").trim();
+    jsonStr = jsonStr.replace(/^```(?:json)?\s*/gi, "").replace(/\s*```$/g, "").trim();
 
     let data = { moto: [], car: [] };
     try {

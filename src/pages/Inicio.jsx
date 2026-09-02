@@ -40,35 +40,57 @@ export function Inicio() {
     return () => unsub();
   }, []);
 
+  const processSelectedFile = (file) => {
+    if (!file) return;
+    const isImage = (file.type && file.type.startsWith('image/')) || /\.(jpe?g|png|webp|gif|bmp)$/i.test(file.name || '');
+    if (!isImage) {
+      setError("Por favor, selecione um arquivo de imagem válido (PNG, JPG, WEBP).");
+      return;
+    }
+
+    setSelectedFile(file);
+    setError(null);
+    
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreviewUrl(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Paste listener for clipboard images (Ctrl + V)
+  useEffect(() => {
+    const handleWindowPaste = (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type && items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile();
+          if (file) {
+            processSelectedFile(file);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('paste', handleWindowPaste);
+    return () => window.removeEventListener('paste', handleWindowPaste);
+  }, []);
+
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.type.startsWith('image/')) {
-        setError("Por favor, selecione um arquivo de imagem válido (PNG, JPG, etc).");
-        return;
-      }
-      setSelectedFile(file);
-      setError(null);
-      
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreviewUrl(reader.result);
-      };
-      reader.readAsDataURL(file);
+      processSelectedFile(file);
     }
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      setSelectedFile(file);
-      setError(null);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreviewUrl(reader.result);
-      };
-      reader.readAsDataURL(file);
+    if (file) {
+      processSelectedFile(file);
     } else {
       setError("Por favor, solte apenas arquivos de imagem.");
     }
@@ -78,49 +100,55 @@ export function Inicio() {
     e.preventDefault();
   };
 
-  // Helper to compress image before uploading (prevents Vercel 4.5MB payload limit issues)
+  // Helper to compress image before uploading (prevents heavy payloads and speeds up AI recognition)
   const compressImageIfNeeded = async (file) => {
     return new Promise((resolve) => {
-      if (file.size < 1.5 * 1024 * 1024) {
-        return resolve(file); // Already small enough
+      // Se for menor que 800KB e não for imagem gigantesca, envia direto
+      if (file.size < 800 * 1024) {
+        return resolve(file);
       }
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        const maxDim = 1800;
-        if (width > maxDim || height > maxDim) {
-          if (width > height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
+      try {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1600;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
           }
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return resolve(file);
-        ctx.drawImage(img, 0, 0, width, height);
-        canvas.toBlob(
-          (blob) => {
-            if (!blob) return resolve(file);
-            const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
-              type: 'image/jpeg',
-              lastModified: Date.now(),
-            });
-            resolve(compressedFile);
-          },
-          'image/jpeg',
-          0.85
-        );
-      };
-      img.onerror = () => resolve(file);
-      img.src = url;
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve(file);
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) return resolve(file);
+              const fileName = file.name ? file.name.replace(/\.[^/.]+$/, ".jpg") : "escala.jpg";
+              const compressedFile = new File([blob], fileName, {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            },
+            'image/jpeg',
+            0.82
+          );
+        };
+        img.onerror = () => resolve(file);
+        img.src = url;
+      } catch {
+        resolve(file);
+      }
     });
   };
 
@@ -146,34 +174,58 @@ export function Inicio() {
       const fileToUpload = await compressImageIfNeeded(selectedFile);
       const base64Data = await fileToBase64(fileToUpload);
 
-      const response = await fetch('/api/extract-technicians', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          image: base64Data,
-          mimeType: fileToUpload.type || 'image/jpeg',
-        }),
-      });
+      let extractedData = null;
+      let lastErrorMessage = "";
 
-      const responseText = await response.text();
-      let extractedData;
-      try {
-        extractedData = JSON.parse(responseText);
-      } catch {
-        throw new Error(
-          responseText.length < 250 && responseText.trim()
-            ? responseText.trim()
-            : `Erro no servidor Vercel (${response.status} ${response.statusText}). Certifique-se de que a variável GEMINI_API_KEY foi adicionada nas configurações do Vercel e que você fez um REDEPLOY do projeto.`
-        );
+      // Até 2 tentativas com intervalo se houver 503 (alta demanda transitória)
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const response = await fetch('/api/extract-technicians', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              image: base64Data,
+              mimeType: fileToUpload.type || 'image/jpeg',
+            }),
+          });
+
+          const responseText = await response.text();
+          let parsed;
+          try {
+            parsed = JSON.parse(responseText);
+          } catch {
+            parsed = { error: responseText.slice(0, 200) };
+          }
+
+          if (response.ok && (parsed.moto || parsed.car)) {
+            extractedData = parsed;
+            break;
+          }
+
+          if (response.status === 503 && attempt < 2) {
+            console.log("Alta demanda detectada na primeira tentativa, aguardando 1.5s antes de retentar...");
+            await new Promise((r) => setTimeout(r, 1500));
+            continue;
+          }
+
+          let msg = parsed?.details || parsed?.error || `Erro ${response.status}: Falha ao processar a imagem`;
+          if (typeof msg === 'string' && (msg.includes("503") || msg.includes("high demand") || msg.includes("UNAVAILABLE"))) {
+            msg = "Os servidores de inteligência artificial estão com alta demanda momentânea. Por favor, tente novamente em instantes.";
+          }
+          lastErrorMessage = msg;
+        } catch (fetchErr) {
+          if (attempt < 2) {
+            await new Promise((r) => setTimeout(r, 1500));
+            continue;
+          }
+          lastErrorMessage = fetchErr?.message || "Erro de conexão ao enviar a imagem.";
+        }
       }
 
-      if (!response.ok) {
-        const msg = extractedData.details 
-          ? `${extractedData.error} (${extractedData.details})` 
-          : (extractedData.error || "Falha ao processar a imagem");
-        throw new Error(msg);
+      if (!extractedData) {
+        throw new Error(lastErrorMessage || "Não foi possível extrair os técnicos da imagem. Tente novamente.");
       }
 
       const sanitizedData = {
@@ -191,7 +243,7 @@ export function Inicio() {
       setPreviewUrl(null);
     } catch (err) {
       console.error(err);
-      setError(err.message || "Erro ao conectar com o servidor.");
+      setError(err.message || "Erro ao conectar com o servidor para processar a imagem.");
     } finally {
       setIsUploading(false);
     }
@@ -243,7 +295,7 @@ export function Inicio() {
             </div>
 
             <p className="text-xs text-slate-500 mb-3 leading-relaxed">
-              Arraste ou selecione a imagem da escala para atualizar a lista automaticamente.
+              Arraste, selecione ou cole (<kbd className="px-1.5 py-0.5 text-[10px] bg-slate-100 border border-slate-300 rounded font-mono font-semibold text-slate-700">Ctrl + V</kbd>) a imagem da escala para atualizar a lista automaticamente.
             </p>
 
             <div 
@@ -262,20 +314,34 @@ export function Inicio() {
               />
 
               {previewUrl ? (
-                <div className="w-full flex flex-col items-center justify-center space-y-2">
-                  <div className="relative w-full max-h-40 rounded-lg overflow-hidden border border-slate-200 shadow-xs bg-black/5">
+                <div className="w-full flex flex-col items-center justify-center space-y-2 z-20 pointer-events-auto">
+                  <div className="relative w-full max-h-40 rounded-lg overflow-hidden border border-slate-200 shadow-xs bg-black/5 flex items-center justify-center">
                     <img src={previewUrl} alt="Preview da escala" className="w-full h-full object-contain max-h-36" />
                   </div>
-                  <span className="text-[11px] font-semibold text-slate-600 bg-white px-2 py-0.5 rounded shadow-xs border border-slate-200 truncate max-w-full">
-                    {selectedFile?.name}
-                  </span>
+                  <div className="flex items-center gap-2 max-w-full">
+                    <span className="text-[11px] font-semibold text-slate-600 bg-white px-2 py-0.5 rounded shadow-xs border border-slate-200 truncate max-w-[200px]">
+                      {selectedFile?.name || 'Imagem colada'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedFile(null);
+                        setPreviewUrl(null);
+                        setError(null);
+                      }}
+                      className="text-[10px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded border border-red-200 transition"
+                    >
+                      Trocar
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="text-center space-y-1.5 p-2">
                   <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto group-hover:scale-105 transition-transform">
                     <FileImage className="w-5 h-5" />
                   </div>
-                  <p className="text-xs font-semibold text-slate-700">Clique ou arraste a imagem</p>
+                  <p className="text-xs font-semibold text-slate-700">Clique, arraste ou cole com Ctrl+V</p>
                   <p className="text-[10px] text-slate-400">PNG, JPG, WEBP</p>
                 </div>
               )}

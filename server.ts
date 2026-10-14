@@ -27,6 +27,60 @@ async function startServer() {
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+  // Endpoint para testar conexão com a API do Gemini e registrar status
+  app.get("/api/test-gemini", async (_req, res) => {
+    const startTime = Date.now();
+    try {
+      const aiClient = getAi();
+      const modelsToTry = [
+        "gemini-2.5-flash",
+        "gemini-3.8-flash",
+        "gemini-2.5-pro",
+        "gemini-3.5-flash"
+      ];
+      let response: any = null;
+      let usedModel = "";
+      let lastError: any = null;
+
+      for (const modelName of modelsToTry) {
+        try {
+          response = await aiClient.models.generateContent({
+            model: modelName,
+            contents: "Responda apenas com a palavra OK",
+          });
+          if (response && response.text) {
+            usedModel = modelName;
+            break;
+          }
+        } catch (err: any) {
+          lastError = err;
+        }
+      }
+
+      if (!response || !response.text) {
+        throw new Error(lastError?.message || "Nenhum modelo Gemini respondeu ao teste.");
+      }
+
+      const latencyMs = Date.now() - startTime;
+      return res.json({
+        success: true,
+        status: "online",
+        model: usedModel,
+        latencyMs,
+        timestamp: new Date().toISOString()
+      });
+    } catch (err: any) {
+      console.error("Erro no teste da API Gemini:", err);
+      return res.status(500).json({
+        success: false,
+        status: "error",
+        error: "Falha na comunicação com a API do Gemini",
+        details: err?.message || String(err),
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
   app.post("/api/extract-technicians", upload.single("image"), async (req, res) => {
     try {
       let base64Data = "";

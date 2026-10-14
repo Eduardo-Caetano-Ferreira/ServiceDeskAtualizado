@@ -11,7 +11,13 @@ import {
   FileText, 
   AlertTriangle, 
   Search, 
-  Sparkles
+  Sparkles,
+  Activity,
+  Clock,
+  RefreshCw,
+  Copy,
+  Check,
+  Zap
 } from 'lucide-react';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -23,9 +29,32 @@ export function Inicio() {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'moto', 'car'
+  const [copiedTechId, setCopiedTechId] = useState(null);
 
-  // Firestore state for technicians
-  const [data, setData] = useState({ moto: [], car: [] });
+  // Gemini Connection Test State
+  const [isTestingGemini, setIsTestingGemini] = useState(false);
+  const [geminiTestResult, setGeminiTestResult] = useState(() => {
+    const local = localStorage.getItem('gemini_last_test_result');
+    if (local) {
+      try {
+        return JSON.parse(local);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  // Firestore state for technicians and last sync
+  const [data, setData] = useState({ 
+    moto: [], 
+    car: [], 
+    updatedAt: null,
+    geminiLastSync: null,
+    geminiStatus: null,
+    geminiModel: null,
+    geminiLatencyMs: null
+  });
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "techniciansList", "current"), (docSnap) => {
@@ -33,12 +62,34 @@ export function Inicio() {
         const docData = docSnap.data();
         setData({
           moto: Array.isArray(docData.moto) ? docData.moto : [],
-          car: Array.isArray(docData.car) ? docData.car : []
+          car: Array.isArray(docData.car) ? docData.car : [],
+          updatedAt: docData.updatedAt || null,
+          geminiLastSync: docData.geminiLastSync || docData.updatedAt || null,
+          geminiStatus: docData.geminiStatus || 'online',
+          geminiModel: docData.geminiModel || null,
+          geminiLatencyMs: docData.geminiLatencyMs || null
         });
       }
     });
     return () => unsub();
   }, []);
+
+  const formatDateTime = (isoString) => {
+    if (!isoString) return 'Nunca sincronizado';
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return 'Nunca sincronizado';
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const seconds = String(d.getSeconds()).padStart(2, '0');
+      return `${day}/${month}/${year} às ${hours}:${minutes}:${seconds}`;
+    } catch {
+      return 'Nunca sincronizado';
+    }
+  };
 
   const processSelectedFile = (file) => {
     if (!file) return;
@@ -100,10 +151,9 @@ export function Inicio() {
     e.preventDefault();
   };
 
-  // Helper to compress image before uploading (prevents heavy payloads and speeds up AI recognition)
+  // Compress image before uploading
   const compressImageIfNeeded = async (file) => {
     return new Promise((resolve) => {
-      // Se for menor que 800KB e não for imagem gigantesca, envia direto
       if (file.size < 800 * 1024) {
         return resolve(file);
       }
@@ -161,6 +211,51 @@ export function Inicio() {
     });
   };
 
+  // Test Gemini API communication
+  const handleTestGemini = async () => {
+    setIsTestingGemini(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/test-gemini');
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        const testPayload = {
+          success: true,
+          status: 'online',
+          model: result.model || 'gemini-2.5-flash',
+          latencyMs: result.latencyMs,
+          timestamp: result.timestamp || new Date().toISOString()
+        };
+
+        setGeminiTestResult(testPayload);
+        localStorage.setItem('gemini_last_test_result', JSON.stringify(testPayload));
+
+        // Save last synchronization in Firestore
+        await setDoc(doc(db, "techniciansList", "current"), {
+          geminiLastSync: testPayload.timestamp,
+          geminiStatus: 'online',
+          geminiModel: testPayload.model,
+          geminiLatencyMs: testPayload.latencyMs
+        }, { merge: true });
+      } else {
+        throw new Error(result.details || result.error || "A API não respondeu com sucesso.");
+      }
+    } catch (err) {
+      console.error("Erro no teste da API Gemini:", err);
+      const errPayload = {
+        success: false,
+        status: 'error',
+        error: err.message || "Falha ao comunicar com o servidor",
+        timestamp: new Date().toISOString()
+      };
+      setGeminiTestResult(errPayload);
+      localStorage.setItem('gemini_last_test_result', JSON.stringify(errPayload));
+    } finally {
+      setIsTestingGemini(false);
+    }
+  };
+
   const handleUpload = async () => {
     if (!selectedFile) {
       setError("Por favor, selecione uma imagem de escala primeiro.");
@@ -177,7 +272,6 @@ export function Inicio() {
       let extractedData = null;
       let lastErrorMessage = "";
 
-      // Até 2 tentativas com intervalo se houver 503 (alta demanda transitória)
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
           const response = await fetch('/api/extract-technicians', {
@@ -205,7 +299,6 @@ export function Inicio() {
           }
 
           if (response.status === 503 && attempt < 2) {
-            console.log("Alta demanda detectada na primeira tentativa, aguardando 1.5s antes de retentar...");
             await new Promise((r) => setTimeout(r, 1500));
             continue;
           }
@@ -233,11 +326,24 @@ export function Inicio() {
         car: Array.isArray(extractedData.car) ? extractedData.car : []
       };
 
-      // Save extracted data to Firestore including updatedAt timestamp
+      const nowIso = new Date().toISOString();
+
+      // Save extracted data and sync time to Firestore
       await setDoc(doc(db, "techniciansList", "current"), {
         ...sanitizedData,
-        updatedAt: new Date().toISOString()
+        updatedAt: nowIso,
+        geminiLastSync: nowIso,
+        geminiStatus: 'online'
       }, { merge: true });
+
+      // Update local storage
+      const syncObj = {
+        success: true,
+        status: 'online',
+        timestamp: nowIso
+      };
+      setGeminiTestResult(syncObj);
+      localStorage.setItem('gemini_last_test_result', JSON.stringify(syncObj));
 
       setSelectedFile(null);
       setPreviewUrl(null);
@@ -247,6 +353,13 @@ export function Inicio() {
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const copyTechData = (tech, id) => {
+    const text = `Técnico: ${tech.name || '-'}\nRegião: ${tech.region || '-'}\nCidade: ${tech.city || '-'}${tech.obs ? `\nObs: ${tech.obs}` : ''}`;
+    navigator.clipboard.writeText(text);
+    setCopiedTechId(id);
+    setTimeout(() => setCopiedTechId(null), 2000);
   };
 
   // Filter helper
@@ -264,256 +377,373 @@ export function Inicio() {
   const filteredMoto = filterList(data.moto);
   const filteredCar = filterList(data.car);
   const totalCount = data.moto.length + data.car.length;
+  const lastSyncTimestamp = data.geminiLastSync || geminiTestResult?.timestamp || data.updatedAt;
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      className="max-w-7xl mx-auto space-y-5 pb-20 px-4 sm:px-6"
+      exit={{ opacity: 0, y: -8 }}
+      className="w-full space-y-4 pb-12"
     >
-      {/* Header Banner */}
-      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-        <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 flex items-center gap-3">
-          <div className="bg-red-100 p-2 rounded-xl text-red-600">
-            <Sparkles className="w-5 h-5" />
+      {/* GRID COM APROVEITAMENTO DE 100% DO ESPAÇO */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start w-full">
+        
+        {/* CARD 1: PAINEL DE ESCALA & TESTE DA API GEMINI (4 colunas no XL) */}
+        <div className="xl:col-span-4 bg-white p-5 rounded-2xl shadow-sm border border-slate-200/90 flex flex-col space-y-4">
+          
+          {/* Header do Card de Upload */}
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <UploadCloud className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-extrabold text-slate-800">Enviar Escala Diária</h2>
+                <p className="text-[11px] text-slate-400">Extração inteligente com IA Gemini</p>
+              </div>
+            </div>
+            <span className="text-[10px] font-extrabold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200">
+              Ctrl + V
+            </span>
           </div>
-          Análise e Escala de Técnicos
-        </h1>
-        <p className="text-slate-500 text-xs sm:text-sm mt-1">
-          Envie a imagem da tabela de escala para extrair e organizar automaticamente os técnicos em MOTO e CARRO.
-        </p>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Upload Panel (Compact) */}
-        <div className="lg:col-span-4 bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4">
-          <div>
-            <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5 mb-3">
-              <UploadCloud className="w-4 h-4 text-red-600" />
-              <h2 className="text-sm font-bold text-slate-800">Enviar Imagem da Escala</h2>
+          {/* ÁREA DE DRAG & DROP / PREVIEW */}
+          <div 
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            className={`border-2 border-dashed rounded-2xl p-4 transition-all flex flex-col items-center justify-center relative overflow-hidden group min-h-[170px] ${
+              previewUrl 
+                ? 'border-red-400 bg-red-50/20' 
+                : 'border-slate-300 bg-slate-50/70 hover:border-red-400 hover:bg-slate-100/80'
+            }`}
+          >
+            <input 
+              type="file" 
+              accept="image/*" 
+              onChange={handleFileChange}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+              disabled={isUploading}
+            />
+
+            {previewUrl ? (
+              <div className="w-full flex flex-col items-center justify-center space-y-2.5 z-20 pointer-events-auto">
+                <div className="relative w-full max-h-44 rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-black/5 flex items-center justify-center">
+                  <img src={previewUrl} alt="Preview da escala" className="w-full h-full object-contain max-h-40" />
+                </div>
+                <div className="flex items-center justify-between w-full px-1">
+                  <span className="text-[11px] font-semibold text-slate-700 bg-white px-2.5 py-1 rounded-lg shadow-xs border border-slate-200 truncate max-w-[200px]">
+                    {selectedFile?.name || 'Imagem colada'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedFile(null);
+                      setPreviewUrl(null);
+                      setError(null);
+                    }}
+                    className="text-[11px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-lg border border-red-200 transition"
+                  >
+                    Trocar Imagem
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center space-y-2 p-3">
+                <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto group-hover:scale-105 transition-transform shadow-xs">
+                  <FileImage className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-700">Arraste a escala aqui ou cole com Ctrl+V</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Suporta fotos e capturas de tela (JPG, PNG, WEBP)</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <motion.div 
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-50 text-red-700 text-xs p-3 rounded-xl border border-red-200 flex items-start gap-2.5"
+            >
+              <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+              <p className="font-semibold text-[11px] leading-relaxed">{error}</p>
+            </motion.div>
+          )}
+
+          {/* BOTÃO PRINCIPAL DE EXTRAÇÃO */}
+          <button 
+            onClick={handleUpload}
+            disabled={!selectedFile || isUploading}
+            className={`w-full py-3 px-4 rounded-xl font-black text-xs uppercase tracking-wider flex justify-center items-center gap-2 transition-all shadow-sm ${
+              !selectedFile || isUploading
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                : 'bg-red-600 hover:bg-red-700 text-white shadow-md hover:shadow-lg active:scale-[0.99]'
+            }`}
+          >
+            {isUploading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                Extraindo Técnicos com Gemini...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                Processar e Carregar Escala
+              </>
+            )}
+          </button>
+
+          {/* WIDGET DE STATUS & TESTE DA API GEMINI */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-red-600" />
+                <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+                  Comunicação com IA
+                </span>
+              </div>
+              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold border uppercase tracking-wider ${
+                geminiTestResult?.success || data.geminiStatus === 'online'
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : geminiTestResult?.status === 'error'
+                  ? 'bg-red-100 text-red-800 border-red-300'
+                  : 'bg-slate-200 text-slate-700 border-slate-300'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  geminiTestResult?.success || data.geminiStatus === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                }`} />
+                {geminiTestResult?.success || data.geminiStatus === 'online' ? 'API Online' : 'Desconectado'}
+              </span>
             </div>
 
-            <p className="text-xs text-slate-500 mb-3 leading-relaxed">
-              Arraste, selecione ou cole (<kbd className="px-1.5 py-0.5 text-[10px] bg-slate-100 border border-slate-300 rounded font-mono font-semibold text-slate-700">Ctrl + V</kbd>) a imagem da escala para atualizar a lista automaticamente.
-            </p>
+            <div className="space-y-1.5 text-[11px] text-slate-600 border-t border-slate-200/80 pt-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium flex items-center gap-1">
+                  <Clock size={12} className="text-slate-400" />
+                  Última Sincronização:
+                </span>
+                <span className="font-bold text-slate-800 text-[11px]">
+                  {formatDateTime(lastSyncTimestamp)}
+                </span>
+              </div>
 
-            <div 
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              className={`border-2 border-dashed rounded-xl p-4 transition flex flex-col items-center justify-center relative overflow-hidden group min-h-[140px] ${
-                previewUrl ? 'border-red-400 bg-red-50/20' : 'border-slate-300 bg-slate-50 hover:border-red-400 hover:bg-slate-100/80'
-              }`}
-            >
-              <input 
-                type="file" 
-                accept="image/*" 
-                onChange={handleFileChange}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                disabled={isUploading}
-              />
-
-              {previewUrl ? (
-                <div className="w-full flex flex-col items-center justify-center space-y-2 z-20 pointer-events-auto">
-                  <div className="relative w-full max-h-40 rounded-lg overflow-hidden border border-slate-200 shadow-xs bg-black/5 flex items-center justify-center">
-                    <img src={previewUrl} alt="Preview da escala" className="w-full h-full object-contain max-h-36" />
-                  </div>
-                  <div className="flex items-center gap-2 max-w-full">
-                    <span className="text-[11px] font-semibold text-slate-600 bg-white px-2 py-0.5 rounded shadow-xs border border-slate-200 truncate max-w-[200px]">
-                      {selectedFile?.name || 'Imagem colada'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedFile(null);
-                        setPreviewUrl(null);
-                        setError(null);
-                      }}
-                      className="text-[10px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded border border-red-200 transition"
-                    >
-                      Trocar
-                    </button>
-                  </div>
+              {(data.geminiLatencyMs || geminiTestResult?.latencyMs) && (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-medium">Tempo de Resposta:</span>
+                  <span className="font-bold text-emerald-700">
+                    {data.geminiLatencyMs || geminiTestResult?.latencyMs} ms
+                  </span>
                 </div>
-              ) : (
-                <div className="text-center space-y-1.5 p-2">
-                  <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto group-hover:scale-105 transition-transform">
-                    <FileImage className="w-5 h-5" />
-                  </div>
-                  <p className="text-xs font-semibold text-slate-700">Clique, arraste ou cole com Ctrl+V</p>
-                  <p className="text-[10px] text-slate-400">PNG, JPG, WEBP</p>
+              )}
+
+              {(data.geminiModel || geminiTestResult?.model) && (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-medium">Modelo Ativo:</span>
+                  <span className="font-mono text-[10px] bg-slate-200/70 px-1.5 py-0.5 rounded text-slate-700 font-bold">
+                    {data.geminiModel || geminiTestResult?.model}
+                  </span>
                 </div>
               )}
             </div>
 
-            {error && (
-              <motion.div 
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-3 bg-red-50 text-red-700 text-xs p-2.5 rounded-xl border border-red-200 flex items-start gap-2"
-              >
-                <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
-                <p className="font-medium text-[11px]">{error}</p>
-              </motion.div>
-            )}
-          </div>
-
-          <div>
-            <button 
-              onClick={handleUpload}
-              disabled={!selectedFile || isUploading}
-              className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex justify-center items-center gap-2 transition-all shadow-xs ${
-                !selectedFile || isUploading
-                  ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
-                  : 'bg-red-600 hover:bg-red-700 text-white shadow-sm hover:shadow active:scale-[0.99]'
+            {/* BOTÃO PARA TESTAR COMUNICAÇÃO GEMINI */}
+            <button
+              type="button"
+              onClick={handleTestGemini}
+              disabled={isTestingGemini}
+              className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 border shadow-2xs ${
+                isTestingGemini 
+                  ? 'bg-slate-200 text-slate-500 border-slate-300 cursor-wait'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300 hover:border-slate-400'
               }`}
             >
-              {isUploading ? (
+              {isTestingGemini ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
-                  Analisando Escala...
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-red-600" />
+                  Testando Conexão com Gemini...
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Analisar e Extrair Dados
+                  <Zap className="w-3.5 h-3.5 text-amber-500" />
+                  Testar Comunicação Gemini
                 </>
               )}
             </button>
           </div>
+
         </div>
 
-        {/* Extracted Data Display Section */}
-        <div className="lg:col-span-8 bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col min-h-[480px]">
-          <div className="flex-grow flex flex-col space-y-4">
-            {/* Header Controls */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-red-600" />
-                <h2 className="text-sm font-bold text-slate-800">
-                  Técnicos Extraídos ({totalCount})
-                </h2>
+        {/* CARD 2: TABELA DE TÉCNICOS EXTRAÍDOS (8 colunas no XL com 100% de largura) */}
+        <div className="xl:col-span-8 bg-white p-5 rounded-2xl shadow-sm border border-slate-200/90 flex flex-col min-h-[580px] w-full">
+          
+          {/* BARRA SUPERIOR: CONTAGEM, ABAS & BUSCA */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            
+            {/* Título & Badge com contagem */}
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <FileText className="w-5 h-5" />
               </div>
-
-              {/* Filter and Search */}
-              {totalCount > 0 && (
+              <div>
                 <div className="flex items-center gap-2">
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                    <input 
-                      type="text" 
-                      placeholder="Buscar por nome, cidade..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-8 pr-3 py-1 bg-slate-50 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-slate-700 w-44 sm:w-56"
-                    />
-                  </div>
+                  <h2 className="text-base font-extrabold text-slate-800">
+                    Escala de Técnicos Ativos
+                  </h2>
+                  <span className="bg-red-600 text-white font-black text-xs px-2.5 py-0.5 rounded-full shadow-xs">
+                    {totalCount}
+                  </span>
                 </div>
-              )}
+                <p className="text-xs text-slate-400">
+                  {totalCount > 0 
+                    ? `${data.moto.length} técnicos de moto • ${data.car.length} técnicos de carro`
+                    : 'Nenhuma escala carregada no momento'
+                  }
+                </p>
+              </div>
             </div>
 
-            {/* Subtabs for filtering Moto / Carro */}
-            {totalCount > 0 && (
-              <div className="flex items-center gap-2 pt-0.5">
+            {/* Controles: Abas e Busca */}
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+              {/* Abas de Categoria */}
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
                 <button
+                  type="button"
                   onClick={() => setActiveTab('all')}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
                     activeTab === 'all'
-                      ? 'bg-slate-800 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   Todos ({totalCount})
                 </button>
                 <button
+                  type="button"
                   onClick={() => setActiveTab('moto')}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
                     activeTab === 'moto'
-                      ? 'bg-amber-600 text-white shadow-xs'
-                      : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                      ? 'bg-amber-500 text-white shadow-xs'
+                      : 'text-amber-700 hover:text-amber-900'
                   }`}
                 >
                   <Bike className="w-3.5 h-3.5" />
                   MOTO ({data.moto.length})
                 </button>
                 <button
+                  type="button"
                   onClick={() => setActiveTab('car')}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
                     activeTab === 'car'
                       ? 'bg-blue-600 text-white shadow-xs'
-                      : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                      : 'text-blue-700 hover:text-blue-900'
                   }`}
                 >
                   <Car className="w-3.5 h-3.5" />
                   CARRO ({data.car.length})
                 </button>
               </div>
-            )}
 
-            {/* Data Content */}
+              {/* Campo de Busca Rápida */}
+              <div className="relative w-full sm:w-56">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input 
+                  type="text" 
+                  placeholder="Filtrar técnico, região..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-8.5 pr-3 py-1.5 bg-slate-50 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-slate-800 font-semibold"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* CONTEÚDO PRINCIPAL: TABELAS OU ESTADO VAZIO */}
+          <div className="flex-1 flex flex-col pt-3">
             {totalCount === 0 ? (
-              <div className="flex-grow flex flex-col items-center justify-center text-slate-400 py-12 px-4 text-center">
-                <div className="w-14 h-14 rounded-full bg-slate-100 text-slate-300 flex items-center justify-center mb-3">
-                  <FileText className="w-7 h-7" />
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-12 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 my-auto">
+                <div className="w-16 h-16 rounded-3xl bg-red-50 text-red-500 flex items-center justify-center mb-4 shadow-sm border border-red-100">
+                  <FileText className="w-8 h-8" />
                 </div>
-                <h3 className="text-slate-600 font-bold text-sm">Nenhum técnico extraído ainda</h3>
-                <p className="text-slate-400 text-xs mt-1 max-w-sm">
-                  Envie a imagem da escala no painel para processar e visualizar os dados dos técnicos divididos em MOTO e CARRO.
+                <h3 className="text-base font-extrabold text-slate-800">
+                  Nenhum técnico cadastrado na rota hoje
+                </h3>
+                <p className="text-xs text-slate-500 max-w-md mt-1.5 leading-relaxed">
+                  Envie ou cole a imagem da escala no painel à esquerda para carregar automaticamente a lista de técnicos com suporte a MOTO e CARRO.
                 </p>
               </div>
             ) : (
-              <div className="space-y-5 flex-grow overflow-y-auto max-h-[600px] pr-1">
-                {/* MOTO SECTION */}
+              <div className="space-y-5 overflow-y-auto max-h-[680px] pr-1">
+                
+                {/* SEÇÃO MOTO */}
                 {(activeTab === 'all' || activeTab === 'moto') && (
                   <div className="space-y-2.5">
-                    <div className="flex items-center justify-between bg-amber-50 border border-amber-200/80 p-2 rounded-xl text-amber-900">
-                      <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider">
-                        <div className="bg-amber-500 text-white p-1 rounded-md">
+                    <div className="flex items-center justify-between bg-gradient-to-r from-amber-50 to-orange-50/30 border border-amber-200 p-2.5 rounded-xl text-amber-900">
+                      <div className="flex items-center gap-2 font-black text-xs uppercase tracking-wider">
+                        <div className="bg-amber-500 text-white p-1 rounded-md shadow-2xs">
                           <Bike className="w-3.5 h-3.5" />
                         </div>
-                        Categoria MOTO ({filteredMoto.length})
+                        Técnicos de MOTO ({filteredMoto.length})
                       </div>
                     </div>
 
                     {filteredMoto.length === 0 ? (
-                      <p className="text-xs text-slate-400 italic px-2 py-1">
-                        Nenhum técnico de moto encontrado{searchQuery ? ' para esta busca' : ''}.
+                      <p className="text-xs text-slate-400 italic px-3 py-2 bg-slate-50 rounded-xl border border-slate-200">
+                        Nenhum técnico de moto encontrado{searchQuery ? ' para os filtros informados' : ''}.
                       </p>
                     ) : (
-                      <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-xs">
-                        <table className="w-full text-left text-xs text-slate-600">
-                          <thead className="bg-slate-50 text-slate-700 uppercase font-semibold text-[11px] border-b border-slate-200">
+                      <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-2xs">
+                        <table className="w-full text-left text-xs text-slate-700">
+                          <thead className="bg-slate-50 text-slate-700 uppercase font-bold text-[11px] border-b border-slate-200">
                             <tr>
-                              <th className="px-3.5 py-2">Técnico</th>
-                              <th className="px-3.5 py-2">Região / Setor</th>
-                              <th className="px-3.5 py-2">Cidade</th>
-                              <th className="px-3.5 py-2">Observações</th>
+                              <th className="px-4 py-2.5 w-1/4">Técnico</th>
+                              <th className="px-4 py-2.5 w-1/4">Região / Setor</th>
+                              <th className="px-4 py-2.5 w-1/5">Cidade</th>
+                              <th className="px-4 py-2.5">Observações</th>
+                              <th className="px-3 py-2.5 text-center w-12">Ação</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 bg-white">
                             {filteredMoto.map((tech, idx) => (
-                              <tr key={idx} className="hover:bg-amber-50/30 transition-colors">
-                                <td className="px-3.5 py-2.5 font-bold text-slate-800 flex items-center gap-2">
-                                  <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 font-extrabold flex items-center justify-center text-[9px]">
-                                    {(tech.name || 'T').substring(0, 2).toUpperCase()}
+                              <tr key={idx} className="hover:bg-amber-50/25 transition-colors">
+                                <td className="px-4 py-3 font-bold text-slate-900">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 font-black flex items-center justify-center text-[10px] shrink-0 border border-amber-200">
+                                      {(tech.name || 'T').substring(0, 2).toUpperCase()}
+                                    </div>
+                                    <span className="truncate">{tech.name || 'Sem nome'}</span>
                                   </div>
-                                  {tech.name || 'Sem nome'}
                                 </td>
-                                <td className="px-3.5 py-2.5">
-                                  <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px] font-medium">
-                                    <MapPin className="w-3 h-3 text-slate-400" />
+                                <td className="px-4 py-3">
+                                  <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-200">
+                                    <MapPin className="w-3 h-3 text-red-500 shrink-0" />
                                     {tech.region || '-'}
                                   </span>
                                 </td>
-                                <td className="px-3.5 py-2.5">
-                                  <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px] font-medium">
-                                    <Building2 className="w-3 h-3 text-slate-400" />
+                                <td className="px-4 py-3">
+                                  <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-200">
+                                    <Building2 className="w-3 h-3 text-slate-500 shrink-0" />
                                     {tech.city || '-'}
                                   </span>
                                 </td>
-                                <td className="px-3.5 py-2.5 text-slate-500 max-w-xs truncate" title={tech.obs}>
+                                <td className="px-4 py-3 text-slate-600 font-medium max-w-xs truncate" title={tech.obs}>
                                   {tech.obs || '-'}
+                                </td>
+                                <td className="px-3 py-3 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => copyTechData(tech, `moto-${idx}`)}
+                                    title="Copiar dados do técnico"
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                                  >
+                                    {copiedTechId === `moto-${idx}` ? (
+                                      <Check size={14} className="text-emerald-600" />
+                                    ) : (
+                                      <Copy size={14} />
+                                    )}
+                                  </button>
                                 </td>
                               </tr>
                             ))}
@@ -524,56 +754,73 @@ export function Inicio() {
                   </div>
                 )}
 
-                {/* CARRO SECTION */}
+                {/* SEÇÃO CARRO */}
                 {(activeTab === 'all' || activeTab === 'car') && (
-                  <div className="space-y-2.5 pt-1">
-                    <div className="flex items-center justify-between bg-blue-50 border border-blue-200/80 p-2 rounded-xl text-blue-900">
-                      <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider">
-                        <div className="bg-blue-600 text-white p-1 rounded-md">
+                  <div className="space-y-2.5 pt-2">
+                    <div className="flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50/30 border border-blue-200 p-2.5 rounded-xl text-blue-900">
+                      <div className="flex items-center gap-2 font-black text-xs uppercase tracking-wider">
+                        <div className="bg-blue-600 text-white p-1 rounded-md shadow-2xs">
                           <Car className="w-3.5 h-3.5" />
                         </div>
-                        Categoria CARRO ({filteredCar.length})
+                        Técnicos de CARRO ({filteredCar.length})
                       </div>
                     </div>
 
                     {filteredCar.length === 0 ? (
-                      <p className="text-xs text-slate-400 italic px-2 py-1">
-                        Nenhum técnico de carro encontrado{searchQuery ? ' para esta busca' : ''}.
+                      <p className="text-xs text-slate-400 italic px-3 py-2 bg-slate-50 rounded-xl border border-slate-200">
+                        Nenhum técnico de carro encontrado{searchQuery ? ' para os filtros informados' : ''}.
                       </p>
                     ) : (
-                      <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-xs">
-                        <table className="w-full text-left text-xs text-slate-600">
-                          <thead className="bg-slate-50 text-slate-700 uppercase font-semibold text-[11px] border-b border-slate-200">
+                      <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-2xs">
+                        <table className="w-full text-left text-xs text-slate-700">
+                          <thead className="bg-slate-50 text-slate-700 uppercase font-bold text-[11px] border-b border-slate-200">
                             <tr>
-                              <th className="px-3.5 py-2">Técnico</th>
-                              <th className="px-3.5 py-2">Região / Setor</th>
-                              <th className="px-3.5 py-2">Cidade</th>
-                              <th className="px-3.5 py-2">Observações</th>
+                              <th className="px-4 py-2.5 w-1/4">Técnico</th>
+                              <th className="px-4 py-2.5 w-1/4">Região / Setor</th>
+                              <th className="px-4 py-2.5 w-1/5">Cidade</th>
+                              <th className="px-4 py-2.5">Observações</th>
+                              <th className="px-3 py-2.5 text-center w-12">Ação</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 bg-white">
                             {filteredCar.map((tech, idx) => (
-                              <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
-                                <td className="px-3.5 py-2.5 font-bold text-slate-800 flex items-center gap-2">
-                                  <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-800 font-extrabold flex items-center justify-center text-[9px]">
-                                    {(tech.name || 'T').substring(0, 2).toUpperCase()}
+                              <tr key={idx} className="hover:bg-blue-50/25 transition-colors">
+                                <td className="px-4 py-3 font-bold text-slate-900">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="w-6 h-6 rounded-lg bg-blue-100 text-blue-800 font-black flex items-center justify-center text-[10px] shrink-0 border border-blue-200">
+                                      {(tech.name || 'T').substring(0, 2).toUpperCase()}
+                                    </div>
+                                    <span className="truncate">{tech.name || 'Sem nome'}</span>
                                   </div>
-                                  {tech.name || 'Sem nome'}
                                 </td>
-                                <td className="px-3.5 py-2.5">
-                                  <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px] font-medium">
-                                    <MapPin className="w-3 h-3 text-slate-400" />
+                                <td className="px-4 py-3">
+                                  <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-200">
+                                    <MapPin className="w-3 h-3 text-red-500 shrink-0" />
                                     {tech.region || '-'}
                                   </span>
                                 </td>
-                                <td className="px-3.5 py-2.5">
-                                  <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px] font-medium">
-                                    <Building2 className="w-3 h-3 text-slate-400" />
+                                <td className="px-4 py-3">
+                                  <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-200">
+                                    <Building2 className="w-3 h-3 text-slate-500 shrink-0" />
                                     {tech.city || '-'}
                                   </span>
                                 </td>
-                                <td className="px-3.5 py-2.5 text-slate-500 max-w-xs truncate" title={tech.obs}>
+                                <td className="px-4 py-3 text-slate-600 font-medium max-w-xs truncate" title={tech.obs}>
                                   {tech.obs || '-'}
+                                </td>
+                                <td className="px-3 py-3 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => copyTechData(tech, `car-${idx}`)}
+                                    title="Copiar dados do técnico"
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                                  >
+                                    {copiedTechId === `car-${idx}` ? (
+                                      <Check size={14} className="text-emerald-600" />
+                                    ) : (
+                                      <Copy size={14} />
+                                    )}
+                                  </button>
                                 </td>
                               </tr>
                             ))}
@@ -583,12 +830,13 @@ export function Inicio() {
                     )}
                   </div>
                 )}
+
               </div>
             )}
           </div>
         </div>
+
       </div>
     </motion.div>
   );
 }
-

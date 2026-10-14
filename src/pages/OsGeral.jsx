@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Calendar, User, FileText, Cpu, Clock, 
-  ShieldCheck, Copy, Trash2, Info, Check
+  Calendar, User, FileText, Cpu, Clock, Headset,
+  Copy, Trash2, Info, Check 
 } from 'lucide-react';
 import { TechniciansRegion } from '../components/TechniciansRegion';
 import { DateInputWithCalendar } from '../components/DateInputWithCalendar';
@@ -14,7 +14,7 @@ const initialState = {
   roteador: '',
   onu: '',
   contato: '',
-  conseguiuContato: 'Sim',
+  conseguiuContato: '', // Padrão vazio para obrigar o operador a selecionar antes de copiar
   clienteDesde: '',
   solicitacao: '',
   sinalStatus: '',
@@ -47,8 +47,9 @@ export function OsGeral() {
       loadedData.nomeAtendente = operadorGlobal;
     }
 
-    return loadedData; // Retorna os dados preenchidos ANTES da tela piscar
+    return loadedData;
   });
+
   const [toast, setToast] = useState(null);
   const [showClearModal, setShowClearModal] = useState(false);
   const [errorFields, setErrorFields] = useState([]);
@@ -67,21 +68,63 @@ export function OsGeral() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // 3. ATUALIZAÇÃO DOS CAMPOS E NOME DO OPERADOR
+  // Salvamento contínuo do formulário no localStorage
+  useEffect(() => {
+    localStorage.setItem('serviceDeskScriptData', JSON.stringify(formData));
+  }, [formData]);
+
+  // Máscara automática para telefones fixos e celulares (Brasil)
+  const formatPhone = (value) => {
+    if (!value) return '';
+    const digits = value.replace(/\D/g, '').slice(0, 11);
+    if (digits.length === 0) return '';
+    if (digits.length <= 2) return `(${digits}`;
+    if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    if (digits.length <= 10) {
+      return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+    }
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     
-    // Salva o nome do atendente na chave global imediatamente
     if (name === 'nomeAtendente') {
       localStorage.setItem('serviceDesk_operador', value);
     }
 
-    setFormData(prev => ({ ...prev, [name]: value }));
+    let finalValue = value;
+    if (name === 'contato') {
+      finalValue = formatPhone(value);
+    }
+
+    setFormData(prev => ({ ...prev, [name]: finalValue }));
     
-    // Remove o alerta de erro assim que o usuário digita algo
-    if (value.trim() !== '') {
+    if (finalValue.trim() !== '') {
       setErrorFields(prev => prev.filter(field => field !== name));
     }
+  };
+
+  // Seleção de Roteador com regra automática: Smart-Pré no roteador também marca a ONU
+  const handleSelectRoteador = (option) => {
+    setFormData(prev => {
+      const next = { ...prev, roteador: option };
+      if (option === 'Smart-Pré') {
+        next.onu = 'Smart-Pré';
+      }
+      return next;
+    });
+
+    setErrorFields(prev => prev.filter(f => {
+      if (option === 'Smart-Pré') return f !== 'roteador' && f !== 'onu';
+      return f !== 'roteador';
+    }));
+  };
+
+  // Seleção individual de ONU
+  const handleSelectOnu = (option) => {
+    setFormData(prev => ({ ...prev, onu: option }));
+    setErrorFields(prev => prev.filter(f => f !== 'onu'));
   };
 
   const showToast = (message, type = 'success') => {
@@ -98,15 +141,15 @@ export function OsGeral() {
       if (parts[0].length === 4) return `${parts[2]}/${parts[1]}/${parts[0]}`;
       if (parts[2].length === 4) return `${parts[0]}/${parts[1]}/${parts[2]}`;
     }
-    return trimmed;
+    return dateString;
   };
 
   const getTodayFormatted = () => {
     const today = new Date();
-    const day = String(today.getDate()).padStart(2, '0');
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const year = today.getFullYear();
-    return `${day}/${month}/${year}`;
+    const dd = String(today.getDate()).padStart(2, '0');
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const yyyy = today.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
   };
 
   const setTodayDate = (fieldName) => {
@@ -118,7 +161,7 @@ export function OsGeral() {
   const validateForm = () => {
     const requiredFields = [
       'dataAgendamento', 'periodo', 'roteador', 'onu', 
-      'contato', 'clienteDesde', 'solicitacao', 'sinalStatus', 'nomeAtendente'
+      'contato', 'conseguiuContato', 'clienteDesde', 'solicitacao', 'sinalStatus'
     ];
     
     let newErrors = [];
@@ -126,6 +169,11 @@ export function OsGeral() {
     requiredFields.forEach(field => {
       if (!formData[field]) newErrors.push(field);
     });
+
+    const op = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador');
+    if (!op) {
+      newErrors.push('nomeAtendente');
+    }
 
     if (formData.periodo === 'Após' && !formData.horarioApos) newErrors.push('horarioApos');
     
@@ -143,7 +191,11 @@ export function OsGeral() {
 
   const copiarScript = () => {
     if (!validateForm()) {
-      showToast("Por favor, preencha todos os campos obrigatórios.", "error");
+      if (!formData.conseguiuContato) {
+        showToast("Por favor, selecione se conseguiu contato (Sim ou Não).", "error");
+      } else {
+        showToast("Por favor, preencha todos os campos obrigatórios.", "error");
+      }
       return;
     }
 
@@ -160,6 +212,8 @@ export function OsGeral() {
       scriptExcecao += ` (Autorizado por: ${formData.nomeAutorizou})`;
     }
 
+    const atendenteAtual = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador') || '';
+
     const finalScript = `=== AGENDAMENTO ===
 DATA: ${dataAgend}
 PERÍODO: ${periodoFmt}
@@ -167,7 +221,7 @@ PERÍODO: ${periodoFmt}
 === INFORMAÇÕES DO CLIENTE ===
 Roteador: ${formData.roteador}
 ONU: ${formData.onu}
-Contato: ${formData.contato} (Conseguiu contato: ${formData.conseguiuContato || 'Sim'})
+Contato: ${formData.contato} (Conseguiu contato: ${formData.conseguiuContato})
 Cliente desde: ${formData.clienteDesde}
 
 === DETALHES DA SOLICITAÇÃO ===
@@ -182,7 +236,7 @@ ${formData.historicoQuedas || 'Nenhum histórico registrado.'}
 ${scriptOSRecente}
 
 === ATENDIMENTO ===
-Atendente: ${formData.nomeAtendente}
+Atendente: ${atendenteAtual}
 ${scriptExcecao}`.trim();
 
     navigator.clipboard.writeText(finalScript);
@@ -191,18 +245,16 @@ ${scriptExcecao}`.trim();
     setTimeout(() => setCopied(false), 2500);
   };
 
-  // 4. LIMPEZA SEGURA DO FORMULÁRIO (Preservando o Operador Global)
   const confirmClear = () => {
     const operadorGlobal = localStorage.getItem('serviceDesk_operador') || '';
     
     const clearedState = {
       ...initialState,
+      conseguiuContato: '',
       nomeAtendente: operadorGlobal 
     };
 
     setFormData(clearedState);
-    
-    // Atualiza o localStorage do formulário para gravar o estado limpo
     localStorage.setItem('serviceDeskScriptData', JSON.stringify(clearedState));
     
     setErrorFields([]);
@@ -220,51 +272,79 @@ ${scriptExcecao}`.trim();
   };
 
   const labelClass = "block text-sm font-semibold text-slate-600 mb-1.5";
-  const cardClass = "bg-white rounded-xl shadow-sm p-5 border-t-4 border-primary flex flex-col h-full";
+  const cardClass = "bg-white rounded-xl shadow-sm p-5 sm:p-6 border-t-4 border-primary border-x border-b border-slate-200 flex flex-col h-full";
   const titleClass = "text-base font-bold border-b border-slate-200 pb-2 mb-4 text-slate-800 flex items-center gap-2";
+
+  // Atalhos rápidos para Sinal/Status da ONU
+  const statusShortcuts = [
+    { label: 'LOS', value: 'LOS', color: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' },
+    { label: 'Sem energia', value: 'Sem energia', color: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' },
+    { label: 'Não encontrado/desprovisionado', value: 'Não encontrado/desprovisionado', color: 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200' }
+  ];
+
+  // Opções para Roteador e ONU
+  const hardwareOptions = [
+    { 
+      label: 'Comodato', 
+      color: 'emerald', 
+      activeClass: 'bg-emerald-600 text-white border-emerald-700 shadow-sm ring-1 ring-emerald-400',
+      inactiveClass: 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+    },
+    { 
+      label: 'Compra', 
+      color: 'blue', 
+      activeClass: 'bg-blue-600 text-white border-blue-700 shadow-sm ring-1 ring-blue-400',
+      inactiveClass: 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100'
+    },
+    { 
+      label: 'Smart-Pré', 
+      color: 'red', 
+      activeClass: 'bg-red-600 text-white border-red-700 shadow-sm ring-1 ring-red-400',
+      inactiveClass: 'bg-red-50 text-red-800 border-red-200 hover:bg-red-100'
+    }
+  ];
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      className="w-full max-w-[1400px] mx-auto space-y-6 relative"
+      className="w-full space-y-6 relative pb-10"
     >
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-3xl font-bold text-slate-800">Ordem de Serviço Geral</h2>
-        <button
-          type="button"
-          onClick={() => setTodayDate('dataAgendamento')}
-          title="Clique para preencher a data de agendamento com a data de hoje"
-          className="text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 active:bg-slate-100 px-3 py-1.5 rounded-full border border-slate-300 flex items-center gap-2 shadow-sm cursor-pointer transition-colors"
-        >
-          <Calendar size={14} className="text-primary" /> Hoje ({getTodayFormatted()})
-        </button>
-      </div>
-
-      {/* TÉCNICOS DA REGIÃO (ROTA DIÁRIA) */}
+      {/* TÉCNICOS DA REGIÃO (ROTA DIÁRIA COM PESQUISA POR CIDADE/BAIRRO) */}
       <TechniciansRegion />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-6">
+      {/* GRADE COM CARTÕES LATERALIZADOS (MODELO ORIGINAL AGRADÁVEL E 100% DE LARGURA) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-6 w-full">
         
-        {/* Agendamento */}
+        {/* Bloco 1: Agendamento */}
         <div className={`${cardClass} xl:col-span-4`}>
-          <h2 className={titleClass}><Calendar size={18} className="text-primary" /> Agendamento</h2>
+          <h2 className={titleClass}>
+            <Calendar size={18} className="text-primary" /> 
+            Agendamento
+          </h2>
           <div className="space-y-4 flex-grow">
             <div>
               <div className="flex justify-between items-center mb-1.5">
-                <label className={labelClass}>Data</label>
+                <label className={labelClass}>Data de Agendamento *</label>
                 <button
                   type="button"
                   onClick={() => setTodayDate('dataAgendamento')}
                   className="text-xs text-primary font-semibold hover:underline cursor-pointer flex items-center gap-1"
                 >
-                  Hoje
+                  Hoje ({getTodayFormatted()})
                 </button>
               </div>
-              <DateInputWithCalendar name="dataAgendamento" value={formData.dataAgendamento} onChange={handleChange} placeholder="DD/MM/AAAA" className={getInputClass('dataAgendamento')} />
+              <DateInputWithCalendar 
+                name="dataAgendamento" 
+                value={formData.dataAgendamento} 
+                onChange={handleChange} 
+                placeholder="DD/MM/AAAA" 
+                className={getInputClass('dataAgendamento')} 
+              />
             </div>
+
             <div>
-              <label className={labelClass}>Período</label>
+              <label className={labelClass}>Período *</label>
               <select name="periodo" value={formData.periodo} onChange={handleChange} className={getInputClass('periodo')}>
                 <option value="">Selecione...</option>
                 <option value="Horário Comercial">Horário Comercial</option>
@@ -275,93 +355,279 @@ ${scriptExcecao}`.trim();
                 <option value="Após">Após (Informar Horário)</option>
               </select>
             </div>
+
             <AnimatePresence>
               {formData.periodo === 'Após' && (
                 <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}>
-                  <label className={labelClass}>Horário Específico</label>
-                  <input type="text" name="horarioApos" value={formData.horarioApos} onChange={handleChange} placeholder="Ex: 16:30" className={getInputClass('horarioApos')} />
+                  <label className={labelClass}>Horário Específico *</label>
+                  <input 
+                    type="text" 
+                    name="horarioApos" 
+                    value={formData.horarioApos} 
+                    onChange={handleChange} 
+                    placeholder="Ex: 16:30" 
+                    className={getInputClass('horarioApos')} 
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
         </div>
 
-        {/* Info Cliente */}
+        {/* Bloco 2: Informações do Cliente */}
         <div className={`${cardClass} xl:col-span-8`}>
-          <h2 className={titleClass}><User size={18} className="text-primary" /> Informações do Cliente</h2>
+          <h2 className={titleClass}>
+            <User size={18} className="text-primary" /> 
+            Informações do Cliente
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            
+            {/* Opções de Roteador em Coluna */}
             <div>
-              <label className={labelClass}>Roteador</label>
-              <select name="roteador" value={formData.roteador} onChange={handleChange} className={getInputClass('roteador')}>
-                <option value="">Selecione...</option>
-                <option value="Comodato">Comodato</option>
-                <option value="Compra">Compra</option>
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>ONU</label>
-              <select name="onu" value={formData.onu} onChange={handleChange} className={getInputClass('onu')}>
-                <option value="">Selecione...</option>
-                <option value="Comodato">Comodato</option>
-                <option value="Compra">Compra</option>
-              </select>
-            </div>
-            <div className="sm:col-span-2 xl:col-span-1">
-              <label className={labelClass}>Contato</label>
-              <input type="text" name="contato" value={formData.contato} onChange={handleChange} placeholder="(XX) XXXXX-XXXX" className={getInputClass('contato')} />
-              <div className="mt-2">
-                <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer select-none bg-slate-50 border border-slate-200 hover:bg-slate-100 px-2.5 py-1.5 rounded-lg transition-colors">
-                  <input
-                    type="checkbox"
-                    name="conseguiuContato"
-                    checked={formData.conseguiuContato !== 'Não'}
-                    onChange={(e) => setFormData(prev => ({ ...prev, conseguiuContato: e.target.checked ? 'Sim' : 'Não' }))}
-                    className="w-4 h-4 text-primary focus:ring-primary accent-primary rounded cursor-pointer"
-                  />
-                  <span>Conseguiu contato? <strong className={formData.conseguiuContato !== 'Não' ? 'text-emerald-600' : 'text-amber-600'}>{formData.conseguiuContato !== 'Não' ? 'Sim' : 'Não'}</strong></span>
-                </label>
+              <label className={labelClass}>Roteador *</label>
+              <div className={`flex flex-col gap-2 p-1.5 rounded-xl border transition-all ${
+                errorFields.includes('roteador')
+                  ? 'border-red-500 bg-red-50/50 ring-1 ring-red-500 animate-error'
+                  : 'border-slate-200 bg-slate-50/70'
+              }`}>
+                {hardwareOptions.map((opt) => {
+                  const isSelected = formData.roteador === opt.label;
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => handleSelectRoteador(opt.label)}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex items-center justify-between shadow-2xs ${
+                        isSelected ? opt.activeClass : opt.inactiveClass
+                      }`}
+                    >
+                      <span>{opt.label}</span>
+                      {isSelected ? (
+                        <Check size={14} className="text-white" />
+                      ) : (
+                        <span className={`w-2 h-2 rounded-full ${
+                          opt.color === 'emerald' ? 'bg-emerald-400' : opt.color === 'blue' ? 'bg-blue-400' : 'bg-red-400'
+                        }`} />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
+
+            {/* Opções de ONU em Coluna */}
+            <div>
+              <label className={labelClass}>ONU *</label>
+              <div className={`flex flex-col gap-2 p-1.5 rounded-xl border transition-all ${
+                errorFields.includes('onu')
+                  ? 'border-red-500 bg-red-50/50 ring-1 ring-red-500 animate-error'
+                  : 'border-slate-200 bg-slate-50/70'
+              }`}>
+                {hardwareOptions.map((opt) => {
+                  const isSelected = formData.onu === opt.label;
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => handleSelectOnu(opt.label)}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex items-center justify-between shadow-2xs ${
+                        isSelected ? opt.activeClass : opt.inactiveClass
+                      }`}
+                    >
+                      <span>{opt.label}</span>
+                      {isSelected ? (
+                        <Check size={14} className="text-white" />
+                      ) : (
+                        <span className={`w-2 h-2 rounded-full ${
+                          opt.color === 'emerald' ? 'bg-emerald-400' : opt.color === 'blue' ? 'bg-blue-400' : 'bg-red-400'
+                        }`} />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Contato com Máscara e Switch Sim/Não */}
             <div className="sm:col-span-2 xl:col-span-1">
-              <label className={labelClass}>Cliente desde</label>
-              <input type="text" name="clienteDesde" value={formData.clienteDesde} onChange={handleChange} placeholder="Ex: 01/2020" className={getInputClass('clienteDesde')} />
+              <label className={labelClass}>Contato *</label>
+              <input 
+                type="text" 
+                name="contato" 
+                value={formData.contato} 
+                onChange={handleChange} 
+                placeholder="(XX) XXXXX-XXXX" 
+                className={getInputClass('contato')} 
+              />
+              
+              {/* SWITCH SIM / NÃO PARA CONSEGUIU CONTATO */}
+              <div className="mt-2.5">
+                <span className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>Conseguiu contato? *</span>
+                  {formData.conseguiuContato && (
+                    <span className={`text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
+                      formData.conseguiuContato === 'Sim' ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'
+                    }`}>
+                      {formData.conseguiuContato}
+                    </span>
+                  )}
+                </span>
+                
+                <div className={`grid grid-cols-2 p-1 rounded-xl border transition-all ${
+                  errorFields.includes('conseguiuContato')
+                    ? 'border-red-500 bg-red-50 ring-1 ring-red-500 animate-error'
+                    : 'border-slate-300 bg-slate-100'
+                }`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormData(prev => ({ ...prev, conseguiuContato: 'Sim' }));
+                      setErrorFields(prev => prev.filter(f => f !== 'conseguiuContato'));
+                    }}
+                    className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      formData.conseguiuContato === 'Sim'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    }`}
+                  >
+                    <Check size={13} className={formData.conseguiuContato === 'Sim' ? 'text-white' : 'opacity-30'} />
+                    Sim
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormData(prev => ({ ...prev, conseguiuContato: 'Não' }));
+                      setErrorFields(prev => prev.filter(f => f !== 'conseguiuContato'));
+                    }}
+                    className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      formData.conseguiuContato === 'Não'
+                        ? 'bg-red-600 text-white shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    }`}
+                  >
+                    <span className={`text-xs ${formData.conseguiuContato === 'Não' ? 'text-white' : 'opacity-30'}`}>✕</span>
+                    Não
+                  </button>
+                </div>
+
+                {errorFields.includes('conseguiuContato') && (
+                  <p className="text-[10px] font-bold text-red-600 mt-1">
+                    Selecione Sim ou Não.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="sm:col-span-2 xl:col-span-1">
+              <label className={labelClass}>Cliente desde *</label>
+              <input 
+                type="text" 
+                name="clienteDesde" 
+                value={formData.clienteDesde} 
+                onChange={handleChange} 
+                placeholder="Ex: 01/2020" 
+                className={getInputClass('clienteDesde')} 
+              />
             </div>
           </div>
         </div>
 
-        {/* Detalhes O.S */}
+        {/* Bloco 3: Detalhes da O.S. */}
         <div className={`${cardClass} xl:col-span-6`}>
-          <h2 className={titleClass}><FileText size={18} className="text-primary" /> Detalhes da O.S.</h2>
+          <h2 className={titleClass}>
+            <FileText size={18} className="text-primary" /> 
+            Detalhes da O.S.
+          </h2>
           <div className="flex-grow">
-            <label className={labelClass}>Solicitação (Motivo)</label>
-            <textarea name="solicitacao" value={formData.solicitacao} onChange={handleChange} rows="5" className={getInputClass('solicitacao', 'resize-none')} placeholder="Descreva a solicitação do cliente..."></textarea>
+            <label className={labelClass}>Solicitação (Motivo) *</label>
+            <textarea 
+              name="solicitacao" 
+              value={formData.solicitacao} 
+              onChange={handleChange} 
+              rows="5" 
+              className={getInputClass('solicitacao', 'resize-none')} 
+              placeholder="Descreva detalhadamente a solicitação do cliente..."
+            />
           </div>
         </div>
 
-        {/* Info Técnica */}
+        {/* Bloco 4: Informações Técnicas com Atalhos Rápidos */}
         <div className={`${cardClass} xl:col-span-6`}>
-          <h2 className={titleClass}><Cpu size={18} className="text-primary" /> Informações Técnicas</h2>
+          <h2 className={titleClass}>
+            <Cpu size={18} className="text-primary" /> 
+            Informações Técnicas
+          </h2>
           <div className="space-y-4 flex-grow">
             <div>
-              <label className={labelClass}>Sinal / Status ONU</label>
-              <input type="text" name="sinalStatus" value={formData.sinalStatus} onChange={handleChange} className={getInputClass('sinalStatus')} placeholder="-20dbm / Online" />
+              <div className="flex items-center justify-between mb-1.5">
+                <label className={labelClass}>Sinal / Status ONU *</label>
+                <span className="text-[11px] font-bold text-slate-400">Atalhos rápidos:</span>
+              </div>
+              <input 
+                type="text" 
+                name="sinalStatus" 
+                value={formData.sinalStatus} 
+                onChange={handleChange} 
+                className={getInputClass('sinalStatus')} 
+                placeholder="Ex: -20dbm / Online ou clique em um atalho abaixo" 
+              />
+
+              {/* ATALHOS RÁPIDOS: LOS, Sem energia, Não encontrado/desprovisionado */}
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {statusShortcuts.map((sc) => {
+                  const isSelected = formData.sinalStatus === sc.value;
+                  return (
+                    <button
+                      key={sc.value}
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({ ...prev, sinalStatus: sc.value }));
+                        setErrorFields(prev => prev.filter(f => f !== 'sinalStatus'));
+                      }}
+                      className={`text-xs font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1.5 ${
+                        isSelected 
+                          ? 'bg-red-600 text-white border-red-700 shadow-xs ring-1 ring-red-400' 
+                          : `${sc.color} hover:shadow-xs active:scale-95`
+                      }`}
+                    >
+                      {isSelected && <Check size={12} />}
+                      {sc.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+
             <div>
-              <label className={labelClass}>Histórico de Quedas / Logs <span className="text-slate-400 font-normal text-xs">(Opcional)</span></label>
-              <textarea name="historicoQuedas" value={formData.historicoQuedas} onChange={handleChange} rows="2" className={getInputClass('historicoQuedas', 'resize-none')} placeholder="Copie os logs relevantes aqui..."></textarea>
+              <label className={labelClass}>
+                Histórico de Quedas / Logs <span className="text-slate-400 font-normal text-xs">(Opcional)</span>
+              </label>
+              <textarea 
+                name="historicoQuedas" 
+                value={formData.historicoQuedas} 
+                onChange={handleChange} 
+                rows="2" 
+                className={getInputClass('historicoQuedas', 'resize-none')} 
+                placeholder="Copie os logs relevantes aqui..."
+              />
             </div>
           </div>
         </div>
 
-        {/* Última O.S */}
+        {/* Bloco 5: Última O.S. (Com Encerramento em TextArea) */}
         <div className={`${cardClass} xl:col-span-6`}>
-          <h2 className={titleClass}><Clock size={18} className="text-primary" /> Última O.S.</h2>
+          <h2 className={titleClass}>
+            <Clock size={18} className="text-primary" /> 
+            Última O.S.
+          </h2>
           <div className="mb-4">
             <span className={labelClass}>Teve atendimento recente?</span>
             <div className="flex gap-4">
               {['Sim', 'Não'].map(op => (
-                <label key={op} className="flex items-center gap-2 cursor-pointer text-sm bg-slate-100 px-4 py-2 rounded-lg border border-slate-300 hover:border-primary transition text-slate-800 flex-1 justify-center">
-                  <input type="radio" name="recentOS" value={op} checked={formData.recentOS === op} onChange={handleChange} className="text-primary focus:ring-primary accent-primary" /> {op}
+                <label key={op} className="flex items-center gap-2 cursor-pointer text-sm bg-slate-100 px-4 py-2 rounded-lg border border-slate-300 hover:border-primary transition text-slate-800 flex-1 justify-center font-medium">
+                  <input type="radio" name="recentOS" value={op} checked={formData.recentOS === op} onChange={handleChange} className="text-primary focus:ring-primary accent-primary" /> 
+                  {op}
                 </label>
               ))}
             </div>
@@ -370,12 +636,12 @@ ${scriptExcecao}`.trim();
             {formData.recentOS === 'Sim' && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
                 <div>
-                  <label className={labelClass}>Tipo</label>
-                  <input type="text" name="tipoOSRecente" value={formData.tipoOSRecente} onChange={handleChange} className={getInputClass('tipoOSRecente')} />
+                  <label className={labelClass}>Tipo *</label>
+                  <input type="text" name="tipoOSRecente" value={formData.tipoOSRecente} onChange={handleChange} placeholder="Ex: Reparo, Mudança..." className={getInputClass('tipoOSRecente')} />
                 </div>
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <label className={labelClass}>Data</label>
+                    <label className={labelClass}>Data *</label>
                     <button
                       type="button"
                       onClick={() => setTodayDate('dataOSRecente')}
@@ -387,14 +653,14 @@ ${scriptExcecao}`.trim();
                   <DateInputWithCalendar name="dataOSRecente" value={formData.dataOSRecente} onChange={handleChange} placeholder="DD/MM/AAAA" className={getInputClass('dataOSRecente')} />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className={labelClass}>Encerramento</label>
-                  <textarea
-                    name="encerramentoOSRecente"
-                    value={formData.encerramentoOSRecente}
-                    onChange={handleChange}
-                    rows={3}
-                    placeholder="Digite ou cole o encerramento da última O.S..."
-                    className={`${getInputClass('encerramentoOSRecente')} resize-y`}
+                  <label className={labelClass}>Encerramento *</label>
+                  <textarea 
+                    name="encerramentoOSRecente" 
+                    value={formData.encerramentoOSRecente} 
+                    onChange={handleChange} 
+                    rows="3" 
+                    placeholder="Cole ou descreva o motivo e os detalhes do encerramento..." 
+                    className={getInputClass('encerramentoOSRecente', 'resize-none')} 
                   />
                 </div>
               </motion.div>
@@ -402,52 +668,63 @@ ${scriptExcecao}`.trim();
           </AnimatePresence>
         </div>
 
-        {/* Atendente & Autorização */}
+        {/* Bloco 6: Detalhes do Atendimento */}
         <div className={`${cardClass} xl:col-span-6`}>
-          <h2 className={titleClass}><ShieldCheck size={18} className="text-primary" /> Atendente & Autorização</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <h2 className={titleClass}>
+            <Headset size={18} className="text-primary" /> 
+            Detalhes do Atendimento
+          </h2>
+          <div className="space-y-4 flex-grow">
+            
+            {/* Indicador do atendente carregado no sistema */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center font-bold text-xs">
+                  <User size={16} />
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase font-bold text-slate-400 leading-none mb-0.5">
+                    Atendente Vinculado
+                  </span>
+                  <span className="text-xs font-bold text-slate-800">
+                    {formData.nomeAtendente || localStorage.getItem('serviceDesk_operador') || 'Operador Conectado'}
+                  </span>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 border border-emerald-300 px-2 py-0.5 rounded-full">
+                Preenchido Automaticamente
+              </span>
+            </div>
+
             <div>
-              <span className={labelClass}>Autorização por Exceção (Torre)?</span>
+              <span className={labelClass}>Autorização por Exceção?</span>
               <div className="flex gap-4">
                 {['Sim', 'Não'].map(op => (
-                  <label key={op} className="flex items-center gap-2 cursor-pointer text-sm bg-slate-100 px-4 py-2 rounded-lg border border-slate-300 hover:border-primary transition text-slate-800 flex-1 justify-center">
-                    <input type="radio" name="authException" value={op} checked={formData.authException === op} onChange={handleChange} className="accent-primary" /> {op}
+                  <label key={op} className="flex items-center gap-2 cursor-pointer text-sm bg-slate-100 px-4 py-2 rounded-lg border border-slate-300 hover:border-primary transition text-slate-800 flex-1 justify-center font-medium">
+                    <input type="radio" name="authException" value={op} checked={formData.authException === op} onChange={handleChange} className="text-primary focus:ring-primary accent-primary" /> 
+                    {op}
                   </label>
                 ))}
               </div>
-              <AnimatePresence>
-                {formData.authException === 'Sim' && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-4">
-                    <label className={labelClass}>Nome de quem autorizou</label>
-                    <input type="text" name="nomeAutorizou" value={formData.nomeAutorizou} onChange={handleChange} className={getInputClass('nomeAutorizou', 'bg-yellow-50 border-yellow-300 focus:border-yellow-500')} placeholder="Nome do supervisor/gerente" />
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
 
-            <div>
-              <label className={labelClass}>Operador / Atendente</label>
-              <input type="text" name="nomeAtendente" list="atendentes-list" value={formData.nomeAtendente} onChange={handleChange} className={getInputClass('nomeAtendente')} placeholder="Nome do atendente" />
-              <datalist id="atendentes-list">
-                <option value="Heitor Hugo" />
-                <option value="Alejandro Eduardo" />
-                <option value="Matheus Santos" />
-                <option value="Victor Silva" />
-                <option value="Thiago Nathan" />
-                <option value="Celso Cotta" />
-              </datalist>
-            </div>
+            <AnimatePresence>
+              {formData.authException === 'Sim' && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                  <label className={labelClass}>Quem Autorizou? *</label>
+                  <input type="text" name="nomeAutorizou" value={formData.nomeAutorizou} onChange={handleChange} placeholder="Nome de quem autorizou..." className={getInputClass('nomeAutorizou')} />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
-        {/* Botões de Ação */}
-        <div className="xl:col-span-12 flex flex-col sm:flex-row gap-4 pt-4 pb-10">
+        {/* Bloco 7: Botões de Ação */}
+        <div className="xl:col-span-12 flex flex-col sm:flex-row gap-4 pt-2">
           <motion.button 
-            type="button"
-            onClick={copiarScript} 
-            whileTap={{ scale: 0.97 }}
-            animate={copied ? { scale: [1, 1.03, 1] } : {}}
-            transition={{ duration: 0.3 }}
+            type="button" 
+            onClick={copiarScript}
+            whileTap={{ scale: 0.98 }}
             className={`flex-1 font-bold py-4 px-6 rounded-xl shadow-md flex justify-center items-center gap-3 transition-all duration-300 transform ${
               copied 
                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400/50' 
@@ -464,7 +741,7 @@ ${scriptExcecao}`.trim();
                   className="flex items-center gap-2"
                 >
                   <Check size={22} className="animate-bounce text-white" />
-                  Script Copiado!
+                  Script Copiado com Sucesso!
                 </motion.span>
               ) : (
                 <motion.span
@@ -482,15 +759,17 @@ ${scriptExcecao}`.trim();
           </motion.button>
           
           <button 
+            type="button"
             onClick={() => setShowClearModal(true)} 
             className="sm:w-auto bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 px-8 rounded-xl shadow-md flex justify-center items-center gap-3 transition transform hover:scale-[1.01]"
           >
             <Trash2 size={20} /> Limpar
           </button>
         </div>
+
       </div>
 
-      {/* Modal de Confirmação */}
+      {/* Modal de Confirmação de Limpeza */}
       <AnimatePresence>
         {showClearModal && (
           <motion.div 
@@ -515,12 +794,14 @@ ${scriptExcecao}`.trim();
               </p>
               <div className="flex justify-end gap-3">
                 <button 
+                  type="button"
                   onClick={() => setShowClearModal(false)}
                   className="px-5 py-2.5 rounded-lg text-slate-600 font-medium hover:bg-slate-100 transition"
                 >
                   Cancelar
                 </button>
                 <button 
+                  type="button"
                   onClick={confirmClear}
                   className="px-5 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-medium shadow-md transition"
                 >

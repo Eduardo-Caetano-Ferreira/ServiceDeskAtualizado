@@ -9,9 +9,42 @@ import {
 
 const changelogData = [
   {
-    version: '1.1',
+    version: '1.2',
     releaseDate: '14 de Outubro de 2026',
     isLatest: true,
+    highlight: 'Layout da tela de início com 100% de aproveitamento, teste de comunicação com a API do Gemini e modal de nome simplificado.',
+    changes: [
+      {
+        type: 'melhoria',
+        title: 'Layout 100% da Tela na Tela de Início',
+        description: 'Removido o cabeçalho estático e redesenhado os painéis de escala e tabela de técnicos para ocupar toda a largura disponível no monitor sem barras de rolagem desnecessárias.'
+      },
+      {
+        type: 'novo',
+        title: 'Botão de Teste da API do Gemini e Status de Comunicação',
+        description: 'Novo teste de conectividade direta com o Gemini no servidor, calculando tempo de resposta (ms) e modelo ativo com retorno imediato.'
+      },
+      {
+        type: 'novo',
+        title: 'Registro Persistente da Última Sincronização',
+        description: 'Armazenamento do horário da última sincronização da escala e testes de IA no Firestore e LocalStorage, visível em tempo real no painel de controle.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Aprimoramento dos Cartões da Tela Inicial',
+        description: 'Novo design do card de upload com área de arrastar/soltar e suporte a Ctrl+V aprimorado, além de tabela de técnicos com ações rápidas de cópia e contadores dinâmicos.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Modal de Identificação Focado e Direto',
+        description: 'Removidas as sugestões pré-configuradas no modal de operador para um preenchimento mais limpo, ágil e focado.'
+      }
+    ]
+  },
+  {
+    version: '1.1',
+    releaseDate: '14 de Outubro de 2026',
+    isLatest: false,
     highlight: 'Início do versionamento oficial, novo menu retrátil, identidade ETECC Telecom e perfil de operador.',
     changes: [
       {
@@ -115,7 +148,7 @@ export function Changelog() {
                   Histórico de Versões
                 </h1>
                 <span className="bg-red-600 text-white font-extrabold text-xs px-2.5 py-0.5 rounded-full shadow-xs">
-                  v1.1
+                  v1.2
                 </span>
               </div>
               <p className="text-slate-500 text-xs sm:text-sm mt-1">
@@ -128,7 +161,7 @@ export function Changelog() {
         <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 shrink-0">
           <div className="text-right px-2">
             <span className="block text-[10px] uppercase font-bold text-slate-400">Versão Atual</span>
-            <span className="text-sm font-extrabold text-slate-800">1.1.0 Produção</span>
+            <span className="text-sm font-extrabold text-slate-800">1.2.0 Produção</span>
           </div>
           <div className="w-9 h-9 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-black shadow-xs">
             <Zap className="w-5 h-5" />

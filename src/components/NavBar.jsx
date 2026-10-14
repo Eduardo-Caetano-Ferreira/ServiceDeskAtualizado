@@ -23,7 +23,7 @@ const menuItems = [
   { id: 'ponto_adicional', name: 'Ponto Adicional', icon: Network },
   { id: 'reparo_tv', name: 'Reparo TV', icon: MonitorPlay },
   { id: 'feedback', name: 'Feedback', icon: MessageSquare },
-  { id: 'changelog', name: 'Changelog', icon: History, badge: 'v1.1' },
+  { id: 'changelog', name: 'Changelog', icon: History, badge: 'v1.2' },
 ];
 
 export function NavBar({ 
@@ -67,6 +67,9 @@ export function NavBar({
                 src="/logo.png" 
                 alt="ETECC Telecom" 
                 className="w-9 h-9 object-contain group-hover:scale-105 transition-transform" 
+                onLoad={(e) => {
+                  if (e.currentTarget.naturalWidth === 0) setLogoError(true);
+                }}
                 onError={() => setLogoError(true)} 
               />
             ) : (
@@ -89,6 +92,9 @@ export function NavBar({
                   src="/logo.png" 
                   alt="ETECC Telecom" 
                   className="w-8 h-8 object-contain group-hover:scale-105 transition-transform"
+                  onLoad={(e) => {
+                    if (e.currentTarget.naturalWidth === 0) setLogoError(true);
+                  }}
                   onError={() => setLogoError(true)} 
                 />
               ) : (
@@ -103,7 +109,7 @@ export function NavBar({
                   ETECC
                 </span>
                 <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.2 bg-red-600/30 text-red-400 rounded border border-red-500/30">
-                  v1.1
+                  v1.2
                 </span>
               </div>
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-0.5">

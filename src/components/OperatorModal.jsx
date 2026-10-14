@@ -21,14 +21,6 @@ export function OperatorModal({ isOpen, onClose, currentName, onSaveName }) {
     onClose();
   };
 
-  const quickOperators = [
-    'Heitor Hugo',
-    'Alejandro Eduardo',
-    'Matheus Santos',
-    'Victor Silva',
-    'Thiago Nathan',
-    'Celso Cotta'
-  ];
 
   if (!isOpen) return null;
 
@@ -89,33 +81,6 @@ export function OperatorModal({ isOpen, onClose, currentName, onSaveName }) {
                 </p>
               )}
             </div>
-
-            {/* Sugestões rápidas */}
-            <div>
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-                Sugestões da Equipe:
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {quickOperators.map((op) => (
-                  <button
-                    key={op}
-                    type="button"
-                    onClick={() => {
-                      setName(op);
-                      if (error) setError('');
-                    }}
-                    className={`text-xs px-2.5 py-1 rounded-lg border transition font-medium ${
-                      name === op
-                        ? 'bg-red-600 text-white border-red-700 shadow-xs'
-                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    {op}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Actions */}
             <div className="pt-2 flex items-center justify-end gap-3">
               {currentName && (
@@ -131,7 +96,7 @@ export function OperatorModal({ isOpen, onClose, currentName, onSaveName }) {
                 type="submit"
                 className="w-full py-3 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
               >
-                <span>Confirmar e Acessar</span>
+                <span>Confirmar e Salvar Nome</span>
                 <ArrowRight size={16} />
               </button>
             </div>

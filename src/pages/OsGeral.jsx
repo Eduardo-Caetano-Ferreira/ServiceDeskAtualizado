@@ -54,15 +54,18 @@ export function OsGeral() {
   const [errorFields, setErrorFields] = useState([]);
   const [copied, setCopied] = useState(false);
 
-  // 1. CARREGAMENTO INICIAL DO LOCALSTORAGE
+  // Sincronização automática do operador definido no modal
   useEffect(() => {
-    localStorage.setItem('serviceDeskScriptData', JSON.stringify(formData));
-  }, [formData]);
-
-  // 2. SALVAMENTO AUTOMÁTICO DO FORMULÁRIO (Para não perder se fechar a página)
-  useEffect(() => {
-    localStorage.setItem('serviceDeskScriptData', JSON.stringify(formData));
-  }, [formData]);
+    const handleStorageChange = () => {
+      const op = localStorage.getItem('serviceDesk_operador');
+      if (op) {
+        setFormData(prev => ({ ...prev, nomeAtendente: op }));
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    handleStorageChange();
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // 3. ATUALIZAÇÃO DOS CAMPOS E NOME DO OPERADOR
   const handleChange = (e) => {

@@ -47,6 +47,19 @@ export function Feedback() {
   const [showClearModal, setShowClearModal] = useState(false);
   const [errorFields, setErrorFields] = useState([]);
 
+  // Sincronização automática do operador
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const op = localStorage.getItem('serviceDesk_operador');
+      if (op) {
+        setFormData(prev => ({ ...prev, nomeAtendente: op }));
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    handleStorageChange();
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
   useEffect(() => {
     localStorage.setItem('feedbackScriptData', JSON.stringify(formData));
   }, [formData]);

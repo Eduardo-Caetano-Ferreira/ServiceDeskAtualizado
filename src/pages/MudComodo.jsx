@@ -29,21 +29,39 @@ const initialState = {
 export function MudComodo() {
   const [formData, setFormData] = useState(() => {
     const saved = localStorage.getItem('osMudancaComodoData');
+    const operadorGlobal = localStorage.getItem('serviceDesk_operador');
+    let loaded = { ...initialState };
     if (saved) {
       try {
-        return JSON.parse(saved);
+        loaded = { ...loaded, ...JSON.parse(saved) };
       } catch {
-        return initialState;
+        // fallback
       }
     }
-    return initialState;
+    if (operadorGlobal) {
+      loaded.nomeAtendente = operadorGlobal;
+    }
+    return loaded;
   });
   const [toast, setToast] = useState(null);
   const [showClearModal, setShowClearModal] = useState(false);
   const [errorFields, setErrorFields] = useState([]);
   const [copied, setCopied] = useState(false);
 
-  // Salva no LocalStorage[cite: 5]
+  // Sincronização automática do operador
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const op = localStorage.getItem('serviceDesk_operador');
+      if (op) {
+        setFormData(prev => ({ ...prev, nomeAtendente: op }));
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    handleStorageChange();
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // Salva no LocalStorage
   useEffect(() => {
     localStorage.setItem('osMudancaComodoData', JSON.stringify(formData));
   }, [formData]);

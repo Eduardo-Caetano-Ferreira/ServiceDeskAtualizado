@@ -66,6 +66,19 @@ export function PontoAdicional() {
   const [errorFields, setErrorFields] = useState([]);
   const [copied, setCopied] = useState(false);
 
+  // Sincronização automática do operador
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const op = localStorage.getItem('serviceDesk_operador');
+      if (op) {
+        setFormData(prev => ({ ...prev, nomeAtendente: op }));
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    handleStorageChange();
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
   useEffect(() => {
     localStorage.setItem('osPontoAdicionalData', JSON.stringify(formData));
   }, [formData]);

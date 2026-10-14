@@ -14,12 +14,10 @@ function getApiKey() {
 
 function getAi() {
   const key = getApiKey();
-  if (!key) {
-    throw new Error("GEMINI_API_KEY não configurada.");
+  if (key) {
+    return new GoogleGenAI({ apiKey: key });
   }
-  return new GoogleGenAI({
-    apiKey: key,
-  });
+  return new GoogleGenAI({});
 }
 
 async function startServer() {
@@ -87,11 +85,10 @@ Se uma categoria não tiver técnicos, retorne o array vazio [].`;
 
       const aiClient = getAi();
       const modelsToTry = [
-        "gemini-3.5-flash",
-        "gemini-3.5-flash-lite",
+        "gemini-2.5-flash",
         "gemini-3.8-flash",
-        "gemini-3.1-flash-lite",
-        "gemini-flash-lite-latest"
+        "gemini-2.5-pro",
+        "gemini-3.5-flash"
       ];
       let response: any = null;
       let lastError: any = null;

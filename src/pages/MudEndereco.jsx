@@ -30,19 +30,37 @@ const initialState = {
 export function MudEndereco() {
   const [formData, setFormData] = useState(() => {
     const saved = localStorage.getItem('osMudancaEndData');
+    const operadorGlobal = localStorage.getItem('serviceDesk_operador');
+    let loaded = { ...initialState };
     if (saved) {
       try {
-        return JSON.parse(saved);
+        loaded = { ...loaded, ...JSON.parse(saved) };
       } catch {
-        return initialState;
+        // fallback to loaded
       }
     }
-    return initialState;
+    if (operadorGlobal) {
+      loaded.nomeAtendente = operadorGlobal;
+    }
+    return loaded;
   });
   const [toast, setToast] = useState(null);
   const [showClearModal, setShowClearModal] = useState(false);
   const [errorFields, setErrorFields] = useState([]);
   const [copied, setCopied] = useState(false);
+
+  // Sincronização automática do operador
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const op = localStorage.getItem('serviceDesk_operador');
+      if (op) {
+        setFormData(prev => ({ ...prev, nomeAtendente: op }));
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    handleStorageChange();
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // Salvar alterações
   useEffect(() => {

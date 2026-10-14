@@ -6,31 +6,59 @@ import { MudComodo } from './pages/MudComodo';
 import { PontoAdicional } from './pages/PontoAdicional';
 import { Feedback } from './pages/Feedback';
 import { ReparoTV } from './pages/ReparoTV';
-
 import { Inicio } from './pages/Inicio';
+import { Changelog } from './pages/Changelog';
+import { OperatorModal } from './components/OperatorModal';
 
 function App() {
   const [paginaAtual, setPaginaAtual] = useState('os_geral');
+  
+  // Controle de recolhimento da barra lateral
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    return localStorage.getItem('serviceDesk_sidebar_collapsed') === 'true';
+  });
 
-  // Agora o App controla a posição do menu
-  const [menuPosition, setMenuPosition] = useState('left');
+  // Identificação do Operador
+  const [operatorName, setOperatorName] = useState(() => {
+    return localStorage.getItem('serviceDesk_operador') || '';
+  });
+
+  // Modal de identificação abre automaticamente no primeiro acesso se não houver nome
+  const [isOperatorModalOpen, setIsOperatorModalOpen] = useState(() => {
+    const savedName = localStorage.getItem('serviceDesk_operador');
+    return !savedName || savedName.trim() === '';
+  });
+
+  const handleToggleCollapse = (collapsedState) => {
+    setIsCollapsed(collapsedState);
+    localStorage.setItem('serviceDesk_sidebar_collapsed', String(collapsedState));
+  };
+
+  const handleSaveOperatorName = (newName) => {
+    localStorage.setItem('serviceDesk_operador', newName);
+    setOperatorName(newName);
+    // Dispara evento para sincronizar se alguma aba ou formulário estiver ouvindo
+    window.dispatchEvent(new Event('storage'));
+  };
 
   const renderizarPagina = () => {
     switch (paginaAtual) {
-      case 'mud_comodo':
-        return <MudComodo />;
+      case 'index':
+        return <Inicio />;
       case 'os_geral':
         return <OsGeral />;
       case 'mud_endereco':
         return <MudEndereco />;
+      case 'mud_comodo':
+        return <MudComodo />;
       case 'ponto_adicional':
         return <PontoAdicional />;
       case 'reparo_tv':
         return <ReparoTV />;
       case 'feedback':
         return <Feedback />;
-      case 'index':
-        return <Inicio />;
+      case 'changelog':
+        return <Changelog />;
       default:
         return <div className="text-slate-600">Página em construção...</div>;
     }
@@ -38,20 +66,33 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans flex">
+      {/* Barra Lateral com suporte a recolher e identificação de operador */}
       <NavBar
         active={paginaAtual}
         setActive={setPaginaAtual}
-        position={menuPosition}
-        setPosition={setMenuPosition}
+        isCollapsed={isCollapsed}
+        setIsCollapsed={handleToggleCollapse}
+        operatorName={operatorName}
+        onEditOperator={() => setIsOperatorModalOpen(true)}
       />
 
-      {/* Aqui está a mágica: a margem (ml-64) só é aplicada se o menu estiver na esquerda */}
-      <main className={`flex-1 p-6 md:p-10 transition-all duration-300 w-full flex justify-center ${menuPosition === 'left' ? 'ml-0 md:ml-64 mb-24 md:mb-0' : 'ml-0 mb-24'
-        }`}>
+      {/* Conteúdo Principal com margem adaptativa de acordo com a barra lateral */}
+      <main className={`flex-1 p-4 sm:p-6 md:p-8 transition-all duration-300 w-full flex justify-center ${
+        isCollapsed ? 'ml-20' : 'ml-64'
+      }`}>
         <div className="w-full">
           {renderizarPagina()}
         </div>
       </main>
+
+      {/* Modal de identificação de operador no primeiro acesso ou edição */}
+      <OperatorModal
+        key={isOperatorModalOpen ? (operatorName || 'new-operator') : 'closed'}
+        isOpen={isOperatorModalOpen}
+        onClose={() => setIsOperatorModalOpen(false)}
+        currentName={operatorName}
+        onSaveName={handleSaveOperatorName}
+      />
     </div>
   );
 }

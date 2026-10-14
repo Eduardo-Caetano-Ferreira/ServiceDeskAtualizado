@@ -73,13 +73,12 @@ Retorne EXCLUSIVAMENTE um objeto JSON no formato abaixo, sem formatação markdo
 }
 Se uma categoria não tiver técnicos, retorne o array vazio [].`;
 
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = apiKey ? new GoogleGenAI({ apiKey }) : new GoogleGenAI({});
     const modelsToTry = [
-      "gemini-3.5-flash",
-      "gemini-3.5-flash-lite",
+      "gemini-2.5-flash",
       "gemini-3.8-flash",
-      "gemini-3.1-flash-lite",
-      "gemini-flash-lite-latest"
+      "gemini-2.5-pro",
+      "gemini-3.5-flash"
     ];
     let response: any = null;
     let lastError: any = null;

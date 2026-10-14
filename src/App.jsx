@@ -6,6 +6,7 @@ import { MudComodo } from './pages/MudComodo';
 import { PontoAdicional } from './pages/PontoAdicional';
 import { Feedback } from './pages/Feedback';
 import { ReparoTV } from './pages/ReparoTV';
+import { ConsultaCeps } from './pages/ConsultaCeps';
 import { Inicio } from './pages/Inicio';
 import { Changelog } from './pages/Changelog';
 import { OperatorModal } from './components/OperatorModal';
@@ -47,6 +48,8 @@ function App() {
         return <Inicio />;
       case 'os_geral':
         return <OsGeral />;
+      case 'consulta_ceps':
+        return <ConsultaCeps />;
       case 'mud_endereco':
         return <MudEndereco />;
       case 'mud_comodo':

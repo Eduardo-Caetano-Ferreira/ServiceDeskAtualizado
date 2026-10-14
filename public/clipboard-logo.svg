@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ef4444"/>
+      <stop offset="50%" stop-color="#d6334f"/>
+      <stop offset="100%" stop-color="#991b1b"/>
+    </linearGradient>
+    <linearGradient id="clipGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#cbd5e1"/>
+      <stop offset="60%" stop-color="#94a3b8"/>
+      <stop offset="100%" stop-color="#64748b"/>
+    </linearGradient>
+    <linearGradient id="paperGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="125%" height="125%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#d6334f" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Background App Squircle -->
+  <rect width="128" height="128" rx="28" fill="url(#bgGrad)"/>
+  <rect width="126" height="126" x="1" y="1" rx="27" fill="none" stroke="#d6334f" stroke-width="2" stroke-opacity="0.3"/>
+
+  <!-- Clipboard Board -->
+  <g filter="url(#shadow)">
+    <!-- Backboard -->
+    <rect x="22" y="18" width="84" height="96" rx="10" fill="#334155" stroke="#475569" stroke-width="1.5"/>
+    
+    <!-- Paper Sheet -->
+    <rect x="28" y="26" width="72" height="82" rx="6" fill="url(#paperGrad)"/>
+    
+    <!-- Top Clamp Under-bar (Board accent) -->
+    <path d="M42 16 H86 V26 H42 Z" fill="#1e293b" opacity="0.6"/>
+
+    <!-- Document Header Accent Bar -->
+    <rect x="36" y="38" width="28" height="4" rx="2" fill="url(#primaryGrad)"/>
+    <circle cx="70" cy="40" r="2" fill="#94a3b8"/>
+    <circle cx="78" cy="40" r="2" fill="#94a3b8"/>
+    <circle cx="86" cy="40" r="2" fill="#94a3b8"/>
+
+    <!-- Checklist Item 1 -->
+    <g transform="translate(36, 48)">
+      <rect width="9" height="9" rx="2.5" fill="#fee2e2" stroke="#d6334f" stroke-width="1.5"/>
+      <path d="M2 4.5 L3.8 6.5 L7 2.5" fill="none" stroke="#d6334f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="15" y="2.5" width="41" height="4" rx="2" fill="#64748b"/>
+    </g>
+
+    <!-- Checklist Item 2 -->
+    <g transform="translate(36, 62)">
+      <rect width="9" height="9" rx="2.5" fill="#fee2e2" stroke="#d6334f" stroke-width="1.5"/>
+      <path d="M2 4.5 L3.8 6.5 L7 2.5" fill="none" stroke="#d6334f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="15" y="2.5" width="34" height="4" rx="2" fill="#64748b"/>
+    </g>
+
+    <!-- Checklist Item 3 -->
+    <g transform="translate(36, 76)">
+      <rect width="9" height="9" rx="2.5" fill="#fee2e2" stroke="#d6334f" stroke-width="1.5"/>
+      <path d="M2 4.5 L3.8 6.5 L7 2.5" fill="none" stroke="#d6334f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="15" y="2.5" width="38" height="4" rx="2" fill="#94a3b8"/>
+    </g>
+
+    <!-- Bottom summary line -->
+    <rect x="36" y="92" width="22" height="3" rx="1.5" fill="#cbd5e1"/>
+    <rect x="62" y="92" width="30" height="3" rx="1.5" fill="#d6334f" opacity="0.8"/>
+
+    <!-- Clipboard Metal Clip -->
+    <g filter="url(#glow)">
+      <!-- Clip Base -->
+      <path d="M46 16 C46 13 49 11 52 11 H76 C79 11 82 13 82 16 V27 C82 29 80 30 78 30 H50 C48 30 46 29 46 27 Z" fill="url(#clipGrad)"/>
+      <path d="M50 14 H78" stroke="#f8fafc" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+      
+      <!-- Hanging Hole -->
+      <circle cx="64" cy="18" r="3.5" fill="#0f172a"/>
+      <circle cx="64" cy="18" r="4.5" fill="none" stroke="#cbd5e1" stroke-width="1"/>
+
+      <!-- Clip Grip Bar -->
+      <rect x="49" y="25" width="30" height="4.5" rx="2.25" fill="#475569" stroke="#64748b" stroke-width="0.8"/>
+    </g>
+  </g>
+
+  <!-- Active Support Status Indicator Badge -->
+  <g transform="translate(90, 88)" filter="url(#shadow)">
+    <circle cx="14" cy="14" r="14" fill="#d6334f"/>
+    <circle cx="14" cy="14" r="11" fill="#b91c1c"/>
+    <path d="M9 14.5 L12.5 18 L19 10" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

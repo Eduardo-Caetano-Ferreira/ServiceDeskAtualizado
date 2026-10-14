@@ -9,9 +9,52 @@ import {
 
 const changelogData = [
   {
-    version: '1.2',
+    version: '1.3',
     releaseDate: '14 de Outubro de 2026',
     isLatest: true,
+    highlight: 'Reformulação da Tela de Mudança de Endereço, novos switches interativos, máscara de telefone, novo logo de prancheta e favicon.',
+    changes: [
+      {
+        type: 'melhoria',
+        title: 'Remoção do Título da Página e Tag de Data',
+        description: 'Cabeçalho e tag de data removidos na tela de Mudança de Endereço para ganho de espaço útil, permitindo foco imediato nos campos do atendimento.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Ocultação de Campos Fixos (Solicitação e Taxa)',
+        description: 'Os dados fixos (Solicitação: MUDANÇA DE ENDEREÇO e Taxa: ISENTO) foram ocultados da visão do operador, permanecendo gerados automaticamente no script final.'
+      },
+      {
+        type: 'novo',
+        title: 'Switch Obrigatório "Pode Adiantar?" (Sim/Não)',
+        description: 'Campo transformado em switch de seleção Sim/Não, desmarcado por padrão e com validação obrigatória antes da cópia da máscara.'
+      },
+      {
+        type: 'novo',
+        title: 'Controle "Adicionar Observação?" Sim/Não',
+        description: 'Novo toggle interativo para registrar observações e orientações repassadas pelo cliente (ex: ligar com antecedência, pontos de referência adicionais).'
+      },
+      {
+        type: 'melhoria',
+        title: 'Máscara de Telefone e Switch de Contato',
+        description: 'Formatação automática para telefones fixos e celulares no campo de contato, acompanhado de switch de verificação se conseguiu contato (desmarcado por padrão e obrigatório).'
+      },
+      {
+        type: 'melhoria',
+        title: 'Switch em Autorização por Exceção',
+        description: 'Substituição das opções por switch interativo com valor padrão em "Não", expandindo o campo de responsável apenas mediante seleção de "Sim".'
+      },
+      {
+        type: 'design',
+        title: 'Novo Logo de Prancheta e Favicon Técnico',
+        description: 'Identidade visual renovada com logo vetorial de prancheta de ordens de serviço na paleta ETECC Telecom, atualizando o favicon e título do navegador.'
+      }
+    ]
+  },
+  {
+    version: '1.2',
+    releaseDate: '14 de Outubro de 2026',
+    isLatest: false,
     highlight: 'Layout da tela de início com 100% de aproveitamento, teste de comunicação com a API do Gemini e modal de nome simplificado.',
     changes: [
       {
@@ -148,7 +191,7 @@ export function Changelog() {
                   Histórico de Versões
                 </h1>
                 <span className="bg-red-600 text-white font-extrabold text-xs px-2.5 py-0.5 rounded-full shadow-xs">
-                  v1.2
+                  v1.3
                 </span>
               </div>
               <p className="text-slate-500 text-xs sm:text-sm mt-1">
@@ -161,7 +204,7 @@ export function Changelog() {
         <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 shrink-0">
           <div className="text-right px-2">
             <span className="block text-[10px] uppercase font-bold text-slate-400">Versão Atual</span>
-            <span className="text-sm font-extrabold text-slate-800">1.2.0 Produção</span>
+            <span className="text-sm font-extrabold text-slate-800">1.3.0 Produção</span>
           </div>
           <div className="w-9 h-9 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-black shadow-xs">
             <Zap className="w-5 h-5" />

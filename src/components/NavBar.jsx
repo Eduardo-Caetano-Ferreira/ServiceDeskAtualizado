@@ -132,7 +132,7 @@ export function NavBar({
                   ETECC
                 </span>
                 <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 bg-red-600/25 text-red-400 rounded border border-red-500/30">
-                  v1.2
+                  v1.3
                 </span>
               </div>
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-0.5">
@@ -269,7 +269,7 @@ export function NavBar({
             {!isCollapsed && (
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-bold text-slate-400 bg-slate-800/90 px-1.5 py-0.5 rounded border border-slate-700/60">
-                  v1.2
+                  v1.3
                 </span>
                 <Sparkles size={11} className="text-amber-400/80" />
               </div>
@@ -280,7 +280,7 @@ export function NavBar({
               <div className="absolute left-full ml-3 px-2.5 py-1 bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-slate-700">
                 <span>Changelog & Novidades</span>
                 <span className="ml-1.5 text-[9px] bg-slate-700 text-slate-300 px-1 py-0.5 rounded font-bold">
-                  v1.2
+                  v1.3
                 </span>
               </div>
             )}

@@ -2,27 +2,29 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CalendarDays, MapPin, FileCheck, PackageCheck, 
-  ShieldCheck, Copy, Trash2, AlertTriangle, Info, Check
+  ShieldCheck, Copy, Trash2, AlertTriangle, Info, Check, MessageSquarePlus, User
 } from 'lucide-react';
 import { TechniciansRegion } from '../components/TechniciansRegion';
 import { DateInputWithCalendar } from '../components/DateInputWithCalendar';
 
 const initialState = {
-  podeAdiantar: 'Não',
+  podeAdiantar: '', // Desmarcado por padrão (obrigatório)
+  adicionarObs: 'Não',
+  observacaoCliente: '',
   dataAgendamento: '',
   periodo: '',
   horarioApos: '',
   clienteDesde: '',
   contato: '',
-  conseguiuContato: 'Sim',
+  conseguiuContato: '', // Desmarcado por padrão (obrigatório)
   enderecoAtual: '',
   novoEndereco: '',
   refNovoEndereco: '',
   locMaps: '',
   comprovante: '',
-  pontoAdicional: 'Não',
+  pontoAdicional: '', // Desmarcado por padrão (obrigatório)
   eteccResolve: '',
-  authExcecao: 'Não',
+  authExcecao: 'Não', // Marcado como Não por padrão
   nomeAutorizou: '',
   nomeAtendente: ''
 };
@@ -34,16 +36,24 @@ export function MudEndereco() {
     let loaded = { ...initialState };
     if (saved) {
       try {
-        loaded = { ...loaded, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        loaded = { ...loaded, ...parsed };
       } catch {
         // fallback to loaded
       }
+    }
+    // Assegurar que comece desmarcado caso houvesse o padrão antigo salvo no navegador
+    const hasPontoAdicionalMigrated = localStorage.getItem('osMudancaEnd_pontoAdicional_migrated_v2');
+    if (!hasPontoAdicionalMigrated) {
+      loaded.pontoAdicional = '';
+      localStorage.setItem('osMudancaEnd_pontoAdicional_migrated_v2', 'true');
     }
     if (operadorGlobal) {
       loaded.nomeAtendente = operadorGlobal;
     }
     return loaded;
   });
+
   const [toast, setToast] = useState(null);
   const [showClearModal, setShowClearModal] = useState(false);
   const [errorFields, setErrorFields] = useState([]);
@@ -62,23 +72,46 @@ export function MudEndereco() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // Salvar alterações
+  // Salvar alterações contínuas
   useEffect(() => {
     localStorage.setItem('osMudancaEndData', JSON.stringify(formData));
   }, [formData]);
 
+  // Máscara automática de telefones fixos e celulares (Brasil)
+  const formatPhone = (value) => {
+    if (!value) return '';
+    const digits = value.replace(/\D/g, '').slice(0, 11);
+    if (digits.length === 0) return '';
+    if (digits.length <= 2) return `(${digits}`;
+    if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    if (digits.length <= 10) {
+      return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+    }
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
     
-    if (value.trim() !== '') {
+    let finalValue = value;
+    if (name === 'contato') {
+      finalValue = formatPhone(value);
+    }
+
+    if (name === 'nomeAtendente') {
+      localStorage.setItem('serviceDesk_operador', value);
+    }
+
+    setFormData(prev => ({ ...prev, [name]: finalValue }));
+    
+    if (finalValue.trim() !== '') {
       setErrorFields(prev => prev.filter(field => field !== name));
     }
   };
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3500);
   };
 
   const formatDate = (dateString) => {
@@ -109,9 +142,9 @@ export function MudEndereco() {
 
   const validateForm = () => {
     const requiredFields = [
-      'dataAgendamento', 'periodo', 'clienteDesde', 'contato', 
-      'enderecoAtual', 'novoEndereco', 'refNovoEndereco', 
-      'comprovante', 'eteccResolve', 'nomeAtendente'
+      'podeAdiantar', 'dataAgendamento', 'periodo', 'clienteDesde', 
+      'contato', 'conseguiuContato', 'enderecoAtual', 'novoEndereco', 
+      'refNovoEndereco', 'comprovante', 'pontoAdicional', 'eteccResolve'
     ];
     
     let newErrors = [];
@@ -120,8 +153,14 @@ export function MudEndereco() {
       if (!formData[field]) newErrors.push(field);
     });
 
+    const operadorAtual = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador');
+    if (!operadorAtual) {
+      newErrors.push('nomeAtendente');
+    }
+
     if (formData.periodo === 'Após' && !formData.horarioApos) newErrors.push('horarioApos');
     if (formData.authExcecao === 'Sim' && !formData.nomeAutorizou) newErrors.push('nomeAutorizou');
+    if (formData.adicionarObs === 'Sim' && !formData.observacaoCliente?.trim()) newErrors.push('observacaoCliente');
 
     setErrorFields(newErrors);
     return newErrors.length === 0;
@@ -129,7 +168,17 @@ export function MudEndereco() {
 
   const copiarScript = () => {
     if (!validateForm()) {
-      showToast("Por favor, preencha todos os campos obrigatórios.", "error");
+      if (!formData.podeAdiantar) {
+        showToast("Por favor, selecione se pode adiantar (Sim ou Não).", "error");
+      } else if (!formData.conseguiuContato) {
+        showToast("Por favor, selecione se conseguiu contato (Sim ou Não).", "error");
+      } else if (!formData.pontoAdicional) {
+        showToast("Por favor, selecione se o cliente tem ponto adicional (Sim ou Não).", "error");
+      } else if (formData.adicionarObs === 'Sim' && !formData.observacaoCliente?.trim()) {
+        showToast("Por favor, insira a observação repassada pelo cliente.", "error");
+      } else {
+        showToast("Por favor, preencha todos os campos obrigatórios.", "error");
+      }
       return;
     }
 
@@ -141,22 +190,29 @@ export function MudEndereco() {
       txtExcecao += ` (Autorizado por: ${formData.nomeAutorizou})`;
     }
 
+    let blocoObservacao = '';
+    if (formData.adicionarObs === 'Sim' && formData.observacaoCliente?.trim()) {
+      blocoObservacao = `\nObservação: ${formData.observacaoCliente.trim()}`;
+    }
+
+    const operadorFinal = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador') || '';
+
     const finalScript = `=== O.S MUDANÇA DE ENDEREÇO ===
 Solicitação: MUDANÇA DE ENDEREÇO
 Pode adiantar? ${formData.podeAdiantar}
 Data: ${dataAgend}
 Período: ${periodoFmt}
-Taxa: ISENTO
+Taxa: ISENTO${blocoObservacao}
 
 === CLIENTE ===
 Cliente desde: ${formData.clienteDesde}
-Tel: ${formData.contato} (Conseguiu contato: ${formData.conseguiuContato || 'Sim'})
+Tel: ${formData.contato} (Conseguiu contato: ${formData.conseguiuContato})
 
 === ENDEREÇOS ===
 Atual: ${formData.enderecoAtual}
 Novo: ${formData.novoEndereco}
 Ref: ${formData.refNovoEndereco}
-Maps: ${formData.locMaps}
+Maps: ${formData.locMaps || 'Não informado'}
 
 === DOCUMENTAÇÃO & DETALHES ===
 Comprovante: ${formData.comprovante}
@@ -165,7 +221,7 @@ ETECC Resolve (Mudança): ${formData.eteccResolve}
 
 === AUTORIZAÇÃO / ATENDENTE ===
 Exceção? ${txtExcecao}
-Atendente: ${formData.nomeAtendente}`.trim();
+Atendente: ${operadorFinal}`.trim();
 
     navigator.clipboard.writeText(finalScript);
     setCopied(true);
@@ -174,10 +230,11 @@ Atendente: ${formData.nomeAtendente}`.trim();
   };
 
   const confirmClear = () => {
-    setFormData(prev => ({
+    const op = localStorage.getItem('serviceDesk_operador') || '';
+    setFormData({
       ...initialState,
-      nomeAtendente: prev.nomeAtendente 
-    }));
+      nomeAtendente: op 
+    });
     setErrorFields([]);
     setShowClearModal(false);
     showToast("Formulário limpo.", "info");
@@ -198,22 +255,10 @@ Atendente: ${formData.nomeAtendente}`.trim();
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       className="w-full max-w-[1400px] mx-auto space-y-6 relative"
     >
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-3xl font-bold text-slate-800">Mudança de Endereço</h2>
-        <button
-          type="button"
-          onClick={() => setTodayDate('dataAgendamento')}
-          title="Clique para preencher a data de agendamento com a data de hoje"
-          className="text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 active:bg-slate-100 px-3 py-1.5 rounded-full border border-slate-300 flex items-center gap-2 shadow-sm cursor-pointer transition-colors"
-        >
-          <CalendarDays size={14} className="text-primary" /> Hoje ({getTodayFormatted()})
-        </button>
-      </div>
-
       {/* TÉCNICOS DA REGIÃO (ROTA DIÁRIA) */}
       <TechniciansRegion />
 
@@ -221,46 +266,104 @@ Atendente: ${formData.nomeAtendente}`.trim();
         
         {/* Agendamento & Detalhes */}
         <div className={`${cardClass} xl:col-span-12`}>
-          <h2 className={titleClass}><CalendarDays size={18} className="text-primary" /> Agendamento & Detalhes</h2>
+          <h2 className={titleClass}>
+            <CalendarDays size={18} className="text-primary" /> 
+            Agendamento & Detalhes
+          </h2>
           
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-            <div>
-              <label className={labelClass}>Solicitação (Fixo)</label>
-              <input type="text" value="MUDANÇA DE ENDEREÇO" readOnly className="w-full bg-slate-200 border border-slate-300 text-slate-600 font-bold rounded-lg px-3 py-2.5 text-sm cursor-not-allowed" />
-            </div>
-            <div>
-              <label className={labelClass}>Taxa (Fixo)</label>
-              <input type="text" value="ISENTO" readOnly className="w-full bg-slate-200 border border-slate-300 text-slate-600 font-bold rounded-lg px-3 py-2.5 text-sm cursor-not-allowed" />
-            </div>
-            <div>
-              <span className={labelClass}>Pode adiantar?</span>
-              <div className="flex gap-4">
-                {['Sim', 'Não'].map(op => (
-                  <label key={op} className="flex items-center justify-center gap-2 cursor-pointer text-sm bg-slate-100 px-4 py-2.5 rounded-lg border border-slate-300 hover:border-primary transition text-slate-800 flex-1">
-                    <input type="radio" name="podeAdiantar" value={op} checked={formData.podeAdiantar === op} onChange={handleChange} className="accent-primary" /> {op}
-                  </label>
-                ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 items-start">
+            
+            {/* 1. Pode Adiantar (Switch Sim/Não Obrigatório) */}
+            <div className="flex flex-col">
+              <div className="flex items-center justify-between mb-1.5 min-h-[24px]">
+                <span className={labelClass}>Pode adiantar? *</span>
+                {formData.podeAdiantar && (
+                  <span className={`text-xs font-bold ${
+                    formData.podeAdiantar === 'Sim' ? 'text-emerald-600' : 'text-red-600'
+                  }`}>
+                    {formData.podeAdiantar}
+                  </span>
+                )}
               </div>
+              
+              <div className={`grid grid-cols-2 p-1 rounded-xl border transition-all h-[42px] items-center ${
+                errorFields.includes('podeAdiantar')
+                  ? 'border-red-500 bg-red-50 ring-1 ring-red-500 animate-error'
+                  : 'border-slate-300 bg-slate-100'
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, podeAdiantar: 'Sim' }));
+                    setErrorFields(prev => prev.filter(f => f !== 'podeAdiantar'));
+                  }}
+                  className={`h-full px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    formData.podeAdiantar === 'Sim'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <Check size={14} className={formData.podeAdiantar === 'Sim' ? 'text-white' : 'opacity-30'} />
+                  Sim
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, podeAdiantar: 'Não' }));
+                    setErrorFields(prev => prev.filter(f => f !== 'podeAdiantar'));
+                  }}
+                  className={`h-full px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    formData.podeAdiantar === 'Não'
+                      ? 'bg-red-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <span className={`text-xs ${formData.podeAdiantar === 'Não' ? 'text-white' : 'opacity-30'}`}>✕</span>
+                  Não
+                </button>
+              </div>
+
+              {errorFields.includes('podeAdiantar') && (
+                <p className="text-[10px] font-bold text-red-600 mt-1">
+                  Selecione Sim ou Não.
+                </p>
+              )}
             </div>
-            <div>
-              <div className="flex justify-between items-center mb-1.5">
-                <label className={labelClass}>Data de Agendamento</label>
+
+            {/* 2. Data de Agendamento */}
+            <div className="flex flex-col">
+              <div className="flex justify-between items-center mb-1.5 min-h-[24px]">
+                <label className={`${labelClass} mb-0 truncate mr-1`}>Data de Agendamento *</label>
                 <button
                   type="button"
                   onClick={() => setTodayDate('dataAgendamento')}
-                  className="text-xs text-primary font-semibold hover:underline cursor-pointer flex items-center gap-1"
+                  title={`Definir data de hoje (${getTodayFormatted()})`}
+                  className="text-xs text-primary font-semibold hover:underline cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap"
                 >
                   Hoje
                 </button>
               </div>
-              <DateInputWithCalendar name="dataAgendamento" value={formData.dataAgendamento} onChange={handleChange} placeholder="DD/MM/AAAA" className={getInputClass('dataAgendamento')} />
+              <DateInputWithCalendar 
+                name="dataAgendamento" 
+                value={formData.dataAgendamento} 
+                onChange={handleChange} 
+                placeholder="DD/MM/AAAA" 
+                className={getInputClass('dataAgendamento', 'h-[42px]')} 
+              />
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="md:col-span-2">
-              <label className={labelClass}>Período</label>
-              <select name="periodo" value={formData.periodo} onChange={handleChange} className={getInputClass('periodo')}>
+            {/* 3. Período */}
+            <div className="flex flex-col">
+              <div className="flex items-center justify-between mb-1.5 min-h-[24px]">
+                <label className={`${labelClass} mb-0`}>Período *</label>
+              </div>
+              <select 
+                name="periodo" 
+                value={formData.periodo} 
+                onChange={handleChange} 
+                className={getInputClass('periodo', 'h-[42px] py-0')}
+              >
                 <option value="">Selecione...</option>
                 <option value="Comercial">Comercial</option>
                 <option value="Primeira do dia">Primeira do dia</option>
@@ -270,63 +373,250 @@ Atendente: ${formData.nomeAtendente}`.trim();
                 <option value="Após">Após (Informar Horário)</option>
               </select>
             </div>
+
+            {/* 4. Adicionar observação? Switch */}
+            <div className="flex flex-col">
+              <div className="flex items-center justify-between mb-1.5 min-h-[24px]">
+                <span className={labelClass}>Adicionar observação?</span>
+                <span className={`text-xs font-bold ${
+                  formData.adicionarObs === 'Sim' ? 'text-emerald-600' : 'text-slate-500'
+                }`}>
+                  {formData.adicionarObs}
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-2 p-1 rounded-xl border border-slate-300 bg-slate-100 transition-all h-[42px] items-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, adicionarObs: 'Sim' }));
+                  }}
+                  className={`h-full px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    formData.adicionarObs === 'Sim'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <Check size={14} className={formData.adicionarObs === 'Sim' ? 'text-white' : 'opacity-30'} />
+                  Sim
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, adicionarObs: 'Não', observacaoCliente: '' }));
+                    setErrorFields(prev => prev.filter(f => f !== 'observacaoCliente'));
+                  }}
+                  className={`h-full px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    formData.adicionarObs === 'Não'
+                      ? 'bg-slate-700 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <span className={`text-xs ${formData.adicionarObs === 'Não' ? 'text-white' : 'opacity-30'}`}>✕</span>
+                  Não
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Sub-campos expansíveis: Horário Após e Campo de Observação */}
+          <div className="space-y-4 mt-4">
             <AnimatePresence>
               {formData.periodo === 'Após' && (
-                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="md:col-span-2">
-                  <label className={labelClass}>Horário Específico</label>
-                  <input type="text" name="horarioApos" value={formData.horarioApos} onChange={handleChange} placeholder="Ex: 17:00" className={getInputClass('horarioApos')} />
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }} 
+                  animate={{ opacity: 1, height: 'auto' }} 
+                  exit={{ opacity: 0, height: 0 }} 
+                  className="max-w-md"
+                >
+                  <label className={labelClass}>Horário Específico (Após) *</label>
+                  <input 
+                    type="text" 
+                    name="horarioApos" 
+                    value={formData.horarioApos} 
+                    onChange={handleChange} 
+                    placeholder="Ex: 17:00" 
+                    className={getInputClass('horarioApos')} 
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {formData.adicionarObs === 'Sim' && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }} 
+                  animate={{ opacity: 1, height: 'auto' }} 
+                  exit={{ opacity: 0, height: 0 }} 
+                  className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-200"
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <MessageSquarePlus size={16} className="text-emerald-700" />
+                    <label className="text-sm font-bold text-emerald-900">
+                      Observação Repassada pelo Cliente *
+                    </label>
+                  </div>
+                  <textarea 
+                    name="observacaoCliente" 
+                    value={formData.observacaoCliente} 
+                    onChange={handleChange} 
+                    rows="3" 
+                    placeholder="Ex: Ligar 30 minutos antes para o cliente poder sair do trabalho; portão marrom em frente à padaria..."
+                    className={getInputClass('observacaoCliente', 'bg-white border-emerald-300 focus:border-emerald-600 focus:ring-emerald-600 resize-none')} 
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
+
         </div>
 
         {/* Endereços e Contato */}
         <div className={`${cardClass} xl:col-span-8`}>
-          <h2 className={titleClass}><MapPin size={18} className="text-primary" /> Endereços e Contato</h2>
+          <h2 className={titleClass}>
+            <MapPin size={18} className="text-primary" /> 
+            Endereços e Contato
+          </h2>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
             <div>
-              <label className={labelClass}>Cliente Desde</label>
-              <input type="text" name="clienteDesde" value={formData.clienteDesde} onChange={handleChange} placeholder="Ex: 01/2022" className={getInputClass('clienteDesde')} />
-            </div>
-            <div>
-              <label className={labelClass}>Telefone (Contato)</label>
-              <input type="text" name="contato" value={formData.contato} onChange={handleChange} placeholder="(XX) XXXXX-XXXX" className={getInputClass('contato')} />
-              <div className="mt-2">
-                <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer select-none bg-slate-50 border border-slate-200 hover:bg-slate-100 px-2.5 py-1.5 rounded-lg transition-colors">
-                  <input
-                    type="checkbox"
-                    name="conseguiuContato"
-                    checked={formData.conseguiuContato !== 'Não'}
-                    onChange={(e) => setFormData(prev => ({ ...prev, conseguiuContato: e.target.checked ? 'Sim' : 'Não' }))}
-                    className="w-4 h-4 text-primary focus:ring-primary accent-primary rounded cursor-pointer"
-                  />
-                  <span>Conseguiu contato? <strong className={formData.conseguiuContato !== 'Não' ? 'text-emerald-600' : 'text-amber-600'}>{formData.conseguiuContato !== 'Não' ? 'Sim' : 'Não'}</strong></span>
-                </label>
+              <div className="flex items-center justify-between mb-1.5 min-h-[24px]">
+                <label className={`${labelClass} mb-0`}>Cliente Desde *</label>
               </div>
+              <input 
+                type="text" 
+                name="clienteDesde" 
+                value={formData.clienteDesde} 
+                onChange={handleChange} 
+                placeholder="Ex: 01/2022" 
+                className={getInputClass('clienteDesde', 'h-[42px]')} 
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5 min-h-[24px]">
+                <label className={`${labelClass} mb-0`}>Telefone de Contato *</label>
+              </div>
+              <input 
+                type="text" 
+                name="contato" 
+                value={formData.contato} 
+                onChange={handleChange} 
+                placeholder="(XX) XXXXX-XXXX" 
+                className={getInputClass('contato', 'h-[42px]')} 
+              />
+              <span className="text-[11px] text-slate-400 mt-1 block">
+                Formatação automática de fixo e celular
+              </span>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5 min-h-[24px]">
+                <span className={labelClass}>Conseguiu contato? *</span>
+                {formData.conseguiuContato && (
+                  <span className={`text-xs font-bold ${
+                    formData.conseguiuContato === 'Sim' ? 'text-emerald-600' : 'text-red-600'
+                  }`}>
+                    {formData.conseguiuContato}
+                  </span>
+                )}
+              </div>
+
+              <div className={`grid grid-cols-2 p-1 rounded-xl border transition-all h-[42px] items-center ${
+                errorFields.includes('conseguiuContato')
+                  ? 'border-red-500 bg-red-50 ring-1 ring-red-500 animate-error'
+                  : 'border-slate-300 bg-slate-100'
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, conseguiuContato: 'Sim' }));
+                    setErrorFields(prev => prev.filter(f => f !== 'conseguiuContato'));
+                  }}
+                  className={`h-full px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    formData.conseguiuContato === 'Sim'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <Check size={14} className={formData.conseguiuContato === 'Sim' ? 'text-white' : 'opacity-30'} />
+                  Sim
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, conseguiuContato: 'Não' }));
+                    setErrorFields(prev => prev.filter(f => f !== 'conseguiuContato'));
+                  }}
+                  className={`h-full px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    formData.conseguiuContato === 'Não'
+                      ? 'bg-red-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <span className={`text-xs ${formData.conseguiuContato === 'Não' ? 'text-white' : 'opacity-30'}`}>✕</span>
+                  Não
+                </button>
+              </div>
+
+              {errorFields.includes('conseguiuContato') && (
+                <p className="text-[10px] font-bold text-red-600 mt-1">
+                  Selecione Sim ou Não.
+                </p>
+              )}
             </div>
           </div>
 
           <div className="space-y-6">
             <div>
-              <label className={labelClass}>Endereço Atual</label>
-              <input type="text" name="enderecoAtual" value={formData.enderecoAtual} onChange={handleChange} placeholder="Rua, Número, Bairro - Cidade" className={getInputClass('enderecoAtual')} />
+              <label className={labelClass}>Endereço Atual *</label>
+              <input 
+                type="text" 
+                name="enderecoAtual" 
+                value={formData.enderecoAtual} 
+                onChange={handleChange} 
+                placeholder="Rua, Número, Bairro - Cidade" 
+                className={getInputClass('enderecoAtual')} 
+              />
             </div>
             
             <div className="p-5 bg-red-50/50 rounded-xl border border-red-100 space-y-5">
               <div>
-                <label className="block text-sm font-bold text-red-800 mb-1.5">Novo Endereço</label>
-                <input type="text" name="novoEndereco" value={formData.novoEndereco} onChange={handleChange} placeholder="Rua, Número, Bairro - Cidade" className={getInputClass('novoEndereco', 'border-red-200 focus:border-red-500 focus:ring-red-500')} />
+                <label className="block text-sm font-bold text-red-800 mb-1.5">Novo Endereço *</label>
+                <input 
+                  type="text" 
+                  name="novoEndereco" 
+                  value={formData.novoEndereco} 
+                  onChange={handleChange} 
+                  placeholder="Rua, Número, Bairro - Cidade" 
+                  className={getInputClass('novoEndereco', 'border-red-200 focus:border-red-500 focus:ring-red-500')} 
+                />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-sm font-semibold text-red-800 mb-1.5">Referência</label>
-                  <input type="text" name="refNovoEndereco" value={formData.refNovoEndereco} onChange={handleChange} className={getInputClass('refNovoEndereco', 'border-red-200 focus:border-red-500 focus:ring-red-500')} />
+                  <label className="block text-sm font-semibold text-red-800 mb-1.5">Referência *</label>
+                  <input 
+                    type="text" 
+                    name="refNovoEndereco" 
+                    value={formData.refNovoEndereco} 
+                    onChange={handleChange} 
+                    placeholder="Ex: Próximo à padaria central"
+                    className={getInputClass('refNovoEndereco', 'border-red-200 focus:border-red-500 focus:ring-red-500')} 
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-red-800 mb-1.5">Localização Maps (Link)</label>
-                  <input type="text" name="locMaps" value={formData.locMaps} onChange={handleChange} className={getInputClass('locMaps', 'border-red-200 focus:border-red-500 focus:ring-red-500')} />
+                  <input 
+                    type="text" 
+                    name="locMaps" 
+                    value={formData.locMaps} 
+                    onChange={handleChange} 
+                    placeholder="https://maps.google.com/?q=..."
+                    className={getInputClass('locMaps', 'border-red-200 focus:border-red-500 focus:ring-red-500')} 
+                  />
                 </div>
               </div>
             </div>
@@ -340,7 +630,7 @@ Atendente: ${formData.nomeAtendente}`.trim();
             <h2 className={titleClass}><FileCheck size={18} className="text-primary" /> Verificações</h2>
             
             <div className="mb-6">
-              <label className={labelClass}>Comprovante de Endereço</label>
+              <label className={labelClass}>Comprovante de Endereço *</label>
               <select name="comprovante" value={formData.comprovante} onChange={handleChange} className={getInputClass('comprovante')}>
                 <option value="">Selecione...</option>
                 <option value="Anexado">Anexado</option>
@@ -350,17 +640,62 @@ Atendente: ${formData.nomeAtendente}`.trim();
             </div>
 
             <div>
-              <span className={labelClass}>Cliente tem ponto adicional?</span>
-              <div className="flex gap-4 mb-3">
-                {['Sim', 'Não'].map(op => (
-                  <label key={op} className="flex items-center justify-center gap-2 cursor-pointer text-sm bg-slate-100 px-4 py-2.5 rounded-lg border border-slate-300 hover:border-primary transition text-slate-800 flex-1">
-                    <input type="radio" name="pontoAdicional" value={op} checked={formData.pontoAdicional === op} onChange={handleChange} className="accent-primary" /> {op}
-                  </label>
-                ))}
+              <div className="flex items-center justify-between mb-1.5 min-h-[24px]">
+                <span className={labelClass}>Cliente tem ponto adicional? *</span>
+                {formData.pontoAdicional && (
+                  <span className={`text-xs font-bold ${
+                    formData.pontoAdicional === 'Sim' ? 'text-emerald-600' : 'text-slate-600'
+                  }`}>
+                    {formData.pontoAdicional}
+                  </span>
+                )}
               </div>
+              
+              <div className={`grid grid-cols-2 p-1 rounded-xl border transition-all h-[42px] items-center ${
+                errorFields.includes('pontoAdicional')
+                  ? 'border-red-500 bg-red-50 ring-1 ring-red-500 animate-error'
+                  : 'border-slate-300 bg-slate-100'
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, pontoAdicional: 'Sim' }));
+                    setErrorFields(prev => prev.filter(f => f !== 'pontoAdicional'));
+                  }}
+                  className={`h-full px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    formData.pontoAdicional === 'Sim'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <Check size={14} className={formData.pontoAdicional === 'Sim' ? 'text-white' : 'opacity-30'} />
+                  Sim
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, pontoAdicional: 'Não' }));
+                    setErrorFields(prev => prev.filter(f => f !== 'pontoAdicional'));
+                  }}
+                  className={`h-full px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    formData.pontoAdicional === 'Não'
+                      ? 'bg-slate-700 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <span className={`text-xs ${formData.pontoAdicional === 'Não' ? 'text-white' : 'opacity-30'}`}>✕</span>
+                  Não
+                </button>
+              </div>
+
+              {errorFields.includes('pontoAdicional') && (
+                <p className="text-red-500 text-xs mt-1 font-medium">Selecione se o cliente tem ponto adicional</p>
+              )}
+
               <AnimatePresence>
                 {formData.pontoAdicional === 'Sim' && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm flex items-start gap-2 mt-2">
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm flex items-start gap-2 mt-2.5">
                     <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
                     <span><strong>Atenção:</strong> Notifique o cliente sobre avaliação desse ponto para a nova residência.</span>
                   </motion.div>
@@ -372,7 +707,7 @@ Atendente: ${formData.nomeAtendente}`.trim();
           <div className={`${cardClass} flex-grow border-t-primary`}>
             <h2 className={titleClass}><PackageCheck size={18} className="text-primary" /> ETECC Resolve</h2>
             <div className="flex-grow">
-              <label className={labelClass}>Cliente aceitou serviço de mudança?</label>
+              <label className={labelClass}>Cliente aceitou serviço de mudança? *</label>
               <select name="eteccResolve" value={formData.eteccResolve} onChange={handleChange} className={getInputClass('eteccResolve')}>
                 <option value="">Selecione...</option>
                 <option value="Aceitou">Aceitou</option>
@@ -388,31 +723,97 @@ Atendente: ${formData.nomeAtendente}`.trim();
 
         {/* Autorização & Atendente */}
         <div className={`${cardClass} xl:col-span-12`}>
-          <h2 className={titleClass}><ShieldCheck size={18} className="text-primary" /> Autorização & Atendente</h2>
+          <h2 className={titleClass}>
+            <ShieldCheck size={18} className="text-primary" /> 
+            Autorização & Atendimento
+          </h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Switch de Autorização por Exceção (padrão Não) */}
             <div>
-              <span className={labelClass}>Autorização por Exceção (Torre)?</span>
-              <div className="flex gap-4">
-                {['Sim', 'Não'].map(op => (
-                  <label key={op} className="flex items-center gap-2 cursor-pointer text-sm bg-slate-100 px-4 py-2.5 rounded-lg border border-slate-300 hover:border-primary transition text-slate-800">
-                    <input type="radio" name="authExcecao" value={op} checked={formData.authExcecao === op} onChange={handleChange} className="accent-primary" /> {op}
-                  </label>
-                ))}
+              <div className="flex items-center justify-between mb-1.5 max-w-sm">
+                <span className={labelClass}>Autorização por Exceção (Torre)?</span>
+                <span className={`text-xs font-bold ${
+                  formData.authExcecao === 'Sim' ? 'text-emerald-600' : 'text-slate-500'
+                }`}>
+                  {formData.authExcecao}
+                </span>
               </div>
+
+              <div className="grid grid-cols-2 p-1 rounded-xl border border-slate-300 bg-slate-100 transition-all max-w-sm">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, authExcecao: 'Sim' }));
+                  }}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    formData.authExcecao === 'Sim'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <Check size={14} className={formData.authExcecao === 'Sim' ? 'text-white' : 'opacity-30'} />
+                  Sim
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, authExcecao: 'Não', nomeAutorizou: '' }));
+                    setErrorFields(prev => prev.filter(f => f !== 'nomeAutorizou'));
+                  }}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    formData.authExcecao === 'Não'
+                      ? 'bg-slate-700 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <span className={`text-xs ${formData.authExcecao === 'Não' ? 'text-white' : 'opacity-30'}`}>✕</span>
+                  Não
+                </button>
+              </div>
+
               <AnimatePresence>
                 {formData.authExcecao === 'Sim' && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-4">
-                    <label className="block text-sm font-bold text-red-700 mb-1.5">Nome de quem autorizou</label>
-                    <input type="text" name="nomeAutorizou" value={formData.nomeAutorizou} onChange={handleChange} className={getInputClass('nomeAutorizou', 'bg-red-50 border-red-200 focus:border-red-500 focus:ring-red-500')} />
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-4 max-w-sm">
+                    <label className="block text-sm font-bold text-red-700 mb-1.5">Nome de quem autorizou *</label>
+                    <input 
+                      type="text" 
+                      name="nomeAutorizou" 
+                      value={formData.nomeAutorizou} 
+                      onChange={handleChange} 
+                      placeholder="Ex: Supervisor Lucas"
+                      className={getInputClass('nomeAutorizou', 'bg-red-50 border-red-200 focus:border-red-500 focus:ring-red-500')} 
+                    />
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
 
-            <div>
-              <label className={labelClass}>Operador / Atendente</label>
-              <input type="text" name="nomeAtendente" list="atendentes-list" value={formData.nomeAtendente} onChange={handleChange} className={getInputClass('nomeAtendente')} />
+            {/* Atendente / Operador */}
+            <div className="flex flex-col justify-start">
+              <div className="flex items-center justify-between mb-1.5 min-h-[24px]">
+                <label className={`${labelClass} mb-0`}>Atendente / Operador</label>
+              </div>
+              
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center font-bold text-xs">
+                    <User size={16} />
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-slate-400 leading-none mb-0.5">
+                      Atendente Vinculado
+                    </span>
+                    <span className="text-xs font-bold text-slate-800">
+                      {formData.nomeAtendente || localStorage.getItem('serviceDesk_operador') || 'Operador Conectado'}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 border border-emerald-300 px-2 py-0.5 rounded-full">
+                  Preenchido Automaticamente
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -425,7 +826,7 @@ Atendente: ${formData.nomeAtendente}`.trim();
             whileTap={{ scale: 0.97 }}
             animate={copied ? { scale: [1, 1.03, 1] } : {}}
             transition={{ duration: 0.3 }}
-            className={`flex-1 font-bold py-4 px-6 rounded-xl shadow-md flex justify-center items-center gap-3 transition-all duration-300 transform ${
+            className={`flex-1 font-bold py-4 px-6 rounded-xl shadow-md flex justify-center items-center gap-3 transition-all duration-300 transform cursor-pointer ${
               copied 
                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400/50' 
                 : 'bg-primary hover:bg-primary/90 text-white'
@@ -459,8 +860,9 @@ Atendente: ${formData.nomeAtendente}`.trim();
           </motion.button>
           
           <button 
+            type="button"
             onClick={() => setShowClearModal(true)} 
-            className="sm:w-auto bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 px-8 rounded-xl shadow-md flex justify-center items-center gap-3 transition transform hover:scale-[1.01]"
+            className="sm:w-auto bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 px-8 rounded-xl shadow-md flex justify-center items-center gap-3 transition transform hover:scale-[1.01] cursor-pointer"
           >
             <Trash2 size={20} /> Limpar
           </button>
@@ -489,8 +891,20 @@ Atendente: ${formData.nomeAtendente}`.trim();
                 </span>
               </p>
               <div className="flex justify-end gap-3">
-                <button onClick={() => setShowClearModal(false)} className="px-5 py-2.5 rounded-lg text-slate-600 font-medium hover:bg-slate-100 transition">Cancelar</button>
-                <button onClick={confirmClear} className="px-5 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-medium shadow-md transition">Sim, limpar</button>
+                <button 
+                  type="button"
+                  onClick={() => setShowClearModal(false)} 
+                  className="px-5 py-2.5 rounded-lg text-slate-600 font-medium hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="button"
+                  onClick={confirmClear} 
+                  className="px-5 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-medium shadow-md transition cursor-pointer"
+                >
+                  Sim, limpar
+                </button>
               </div>
             </motion.div>
           </motion.div>
@@ -501,7 +915,9 @@ Atendente: ${formData.nomeAtendente}`.trim();
       <AnimatePresence>
         {toast && (
           <motion.div
-            initial={{ opacity: 0, y: 50, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0, y: 20, x: '-50%' }}
+            initial={{ opacity: 0, y: 50, x: '-50%' }} 
+            animate={{ opacity: 1, y: 0, x: '-50%' }} 
+            exit={{ opacity: 0, y: 20, x: '-50%' }}
             className={`fixed bottom-10 left-1/2 z-50 px-6 py-3 rounded-full shadow-lg font-medium text-white flex items-center gap-2 border border-white/10 ${
               toast.type === 'error' ? 'bg-red-600' : toast.type === 'info' ? 'bg-blue-600' : 'bg-emerald-600'
             }`}

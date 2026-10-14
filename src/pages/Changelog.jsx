@@ -9,9 +9,42 @@ import {
 
 const changelogData = [
   {
-    version: '1.3',
+    version: '1.4',
     releaseDate: '14 de Outubro de 2026',
     isLatest: true,
+    highlight: 'Padronização Global das Telas de Atendimento (Mudança de Cômodo, Ponto Adicional, Reparo TV e Feedback): remoção de títulos/tags redundantes, seleção em coluna de hardware, máscara telefônica, switches interativos e operador vinculado automaticamente.',
+    changes: [
+      {
+        type: 'melhoria',
+        title: 'Remoção de Títulos e Tags de Data',
+        description: 'Cabeçalhos e tags de data removidos das telas operacionais (Mudança de Cômodo, Ponto Adicional, Reparo TV e Feedback) para harmonização visual e aproveitamento otimizado da área útil.'
+      },
+      {
+        type: 'novo',
+        title: 'Seleção em Coluna de Roteador e ONU',
+        description: 'Substituição das caixas suspensas por botões estilizados em coluna para Comodato (Verde), Compra (Azul) e Smart-Pré (Vermelho), com vínculo inteligente que replica Smart-Pré na ONU automaticamente.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Máscara Telefônica e Switch "Conseguiu Contato?"',
+        description: 'Formatação em tempo real de números fixos e celulares no campo Contato/Telefone, com switch Sim/Não desmarcado por padrão e validação obrigatória antes da cópia do script.'
+      },
+      {
+        type: 'novo',
+        title: 'Campos Sim/Não e Estrutura Convertidos para Switches Interativos',
+        description: 'Transformação de todos os seletores Sim/Não (indicação, custos, exceções, upgrades, sintomas) em switches modernos de alta usabilidade com feedback tátil e visual.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Atendente Vinculado Automaticamente',
+        description: 'Campo de operador substituído por indicador padronizado com o sistema em todas as telas, exibindo o usuário conectado e o badge "Preenchido Automaticamente".'
+      }
+    ]
+  },
+  {
+    version: '1.3',
+    releaseDate: '14 de Outubro de 2026',
+    isLatest: false,
     highlight: 'Reformulação da Tela de Mudança de Endereço, novos switches interativos, máscara de telefone, novo logo de prancheta e favicon.',
     changes: [
       {

@@ -15,10 +15,33 @@ function getApiKey() {
 function getAi() {
   const key = getApiKey();
   if (key) {
-    return new GoogleGenAI({ apiKey: key });
+    return new GoogleGenAI({
+      apiKey: key,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
   }
-  return new GoogleGenAI({});
+  return new GoogleGenAI({
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
 }
+
+// Modelos em ordem de prioridade conforme instrução do usuário:
+// 1º Versão Lite (ultra-rápida e eficiente)
+// 2º Em sequência, outras versões caso a Lite não responda
+const MODELS_SEQUENCE = [
+  "gemini-3.1-flash-lite", // 1ª opção: Versão Lite prioritária
+  "gemini-3.8-flash",      // 2ª opção: Versão Flash principal
+  "gemini-3.5-flash",      // 3ª opção: Versão alternativa
+  "gemini-flash-latest"    // 4ª opção: Versão Flash mais recente (alias)
+];
 
 async function startServer() {
   const app = express();
@@ -31,18 +54,24 @@ async function startServer() {
   app.get("/api/test-gemini", async (_req, res) => {
     const startTime = Date.now();
     try {
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        return res.status(500).json({
+          success: false,
+          status: "error",
+          error: "Chave GEMINI_API_KEY não configurada no servidor",
+          timestamp: new Date().toISOString()
+        });
+      }
+
       const aiClient = getAi();
-      const modelsToTry = [
-        "gemini-2.5-flash",
-        "gemini-3.8-flash",
-        "gemini-2.5-pro",
-        "gemini-3.5-flash"
-      ];
       let response: any = null;
       let usedModel = "";
       let lastError: any = null;
+      const attempts: any[] = [];
 
-      for (const modelName of modelsToTry) {
+      for (const modelName of MODELS_SEQUENCE) {
+        const modelStart = Date.now();
         try {
           response = await aiClient.models.generateContent({
             model: modelName,
@@ -50,15 +79,18 @@ async function startServer() {
           });
           if (response && response.text) {
             usedModel = modelName;
+            attempts.push({ model: modelName, success: true, latencyMs: Date.now() - modelStart });
             break;
           }
         } catch (err: any) {
           lastError = err;
+          attempts.push({ model: modelName, success: false, error: err?.message || String(err) });
+          console.warn(`[Teste Gemini] Modelo ${modelName} falhou: ${err?.message || err}. Tentando próximo...`);
         }
       }
 
       if (!response || !response.text) {
-        throw new Error(lastError?.message || "Nenhum modelo Gemini respondeu ao teste.");
+        throw new Error(lastError?.message || "Nenhuma versão do Gemini respondeu ao teste.");
       }
 
       const latencyMs = Date.now() - startTime;
@@ -67,6 +99,7 @@ async function startServer() {
         status: "online",
         model: usedModel,
         latencyMs,
+        attempts,
         timestamp: new Date().toISOString()
       });
     } catch (err: any) {
@@ -81,7 +114,9 @@ async function startServer() {
     }
   });
 
+  // Endpoint para extrair técnicos da escala a partir de imagem
   app.post("/api/extract-technicians", upload.single("image"), async (req, res) => {
+    const startTime = Date.now();
     try {
       let base64Data = "";
       let mimeType = "image/jpeg";
@@ -138,17 +173,15 @@ Retorne EXCLUSIVAMENTE um objeto JSON no formato abaixo, sem formatação markdo
 Se uma categoria não tiver técnicos, retorne o array vazio [].`;
 
       const aiClient = getAi();
-      const modelsToTry = [
-        "gemini-2.5-flash",
-        "gemini-3.8-flash",
-        "gemini-2.5-pro",
-        "gemini-3.5-flash"
-      ];
       let response: any = null;
+      let usedModel = "";
       let lastError: any = null;
+      const failedAttempts: any[] = [];
 
-      for (const modelName of modelsToTry) {
+      // Executa a leitura tentando primeiro a versão Lite, e se falhar testa as outras versões em sequência
+      for (const modelName of MODELS_SEQUENCE) {
         try {
+          console.log(`[IA Leitura] Tentando processar imagem com modelo: ${modelName}...`);
           response = await aiClient.models.generateContent({
             model: modelName,
             contents: [
@@ -169,42 +202,46 @@ Se uma categoria não tiver técnicos, retorne o array vazio [].`;
               responseMimeType: "application/json"
             }
           });
+
           if (response && response.text) {
-            console.log(`Extração concluída com sucesso usando o modelo: ${modelName}`);
+            usedModel = modelName;
+            console.log(`[IA Sucesso] Imagem lida com sucesso utilizando o modelo: ${usedModel}`);
             break;
           }
         } catch (modelErr: any) {
           lastError = modelErr;
-          console.warn(`Tentativa com modelo ${modelName} falhou:`, modelErr?.message || modelErr);
-          // Pequena pausa antes de tentar o próximo modelo caso seja erro de concorrência ou 503
-          await new Promise((r) => setTimeout(r, 600));
+          failedAttempts.push({ model: modelName, error: modelErr?.message || String(modelErr) });
+          console.warn(`[IA Fallback] Modelo ${modelName} falhou: ${modelErr?.message || modelErr}. Tentando próximo modelo da sequência...`);
+          // Pequena pausa se for indisponibilidade temporária antes do próximo modelo
+          await new Promise((r) => setTimeout(r, 300));
         }
       }
 
       if (!response || !response.text) {
-        let cleanErrorMsg = "Os servidores de processamento de imagem estão com alta demanda temporária. Por favor, aguarde alguns instantes e tente novamente.";
-        if (lastError?.message && !lastError.message.includes("503") && !lastError.message.includes("high demand")) {
+        let cleanErrorMsg = "Os servidores de processamento de imagem estão temporariamente sobrecarregados. Por favor, aguarde alguns instantes e tente novamente.";
+        if (lastError?.message && !lastError.message.includes("503") && !lastError.message.includes("high demand") && !lastError.message.includes("UNAVAILABLE")) {
           cleanErrorMsg = lastError.message;
         }
         return res.status(503).json({
           error: "Servidores temporariamente ocupados",
-          details: cleanErrorMsg
+          details: cleanErrorMsg,
+          failedAttempts
         });
       }
 
       let jsonStr = (response.text || "{}").trim();
       
-      // Sanitize JSON response string in case markdown codeblocks were returned
+      // Sanitiza JSON caso markdown tenha sido incluído
       jsonStr = jsonStr.replace(/^```(?:json)?\s*/gi, "").replace(/\s*```$/g, "").trim();
 
-      let data = { moto: [], car: [] };
+      let data: any = { moto: [], car: [] };
       try {
         data = JSON.parse(jsonStr);
         if (!data.moto) data.moto = [];
         if (!data.car) data.car = [];
       } catch (parseError) {
-        console.error("Error parsing JSON from Gemini:", parseError, "Raw output:", jsonStr);
-        // Try regex extraction of JSON object
+        console.error("Erro ao converter JSON do Gemini:", parseError, "Texto bruto:", jsonStr);
+        // Tenta extração via regex de objeto JSON
         const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           try {
@@ -212,14 +249,17 @@ Se uma categoria não tiver técnicos, retorne o array vazio [].`;
             if (!data.moto) data.moto = [];
             if (!data.car) data.car = [];
           } catch (e) {
-            console.error("Regex JSON parse failed:", e);
+            console.error("Falha ao analisar JSON via regex:", e);
           }
         }
       }
 
+      data.modelUsed = usedModel;
+      data.latencyMs = Date.now() - startTime;
+
       res.json(data);
     } catch (error: any) {
-      console.error("Erro na extração:", error);
+      console.error("Erro na extração de técnicos:", error);
       res.status(500).json({ 
         error: "Falha ao processar a imagem.", 
         details: error.message || String(error) 

@@ -9,9 +9,32 @@ import {
 
 const changelogData = [
   {
+    version: '1.5',
+    releaseDate: '15 de Outubro de 2026',
+    isLatest: true,
+    highlight: 'Correção e Alta Disponibilidade na Leitura de Imagens com IA: migração para a versão Lite prioritária (gemini-3.1-flash-lite) e fallback automático em cascata entre versões.',
+    changes: [
+      {
+        type: 'correcao',
+        title: 'Correção de Modelos Descontinuados',
+        description: 'Substituição definitiva de modelos legados descontinuados pela Google pelo motor de última geração do SDK @google/genai.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Prioridade para Versão Lite e Fallback Sequencial',
+        description: 'A leitura de tabelas e fotos de escalas agora tenta primeiro a versão Lite ultra-rápida (gemini-3.1-flash-lite). Caso ela não responda ou haja pico de demanda, o sistema tenta automaticamente em sequência as versões Flash (gemini-3.8-flash, gemini-3.5-flash e gemini-flash-latest) até o sucesso da leitura.'
+      },
+      {
+        type: 'novo',
+        title: 'Diagnóstico de Modelo e Latência em Tempo Real',
+        description: 'Exibição do modelo exato que processou a imagem e a latência de processamento em milissegundos tanto no teste de comunicação quanto na extração de técnicos.'
+      }
+    ]
+  },
+  {
     version: '1.4',
     releaseDate: '14 de Outubro de 2026',
-    isLatest: true,
+    isLatest: false,
     highlight: 'Padronização Global das Telas de Atendimento (Mudança de Cômodo, Ponto Adicional, Reparo TV e Feedback): remoção de títulos/tags redundantes, seleção em coluna de hardware, máscara telefônica, switches interativos e operador vinculado automaticamente.',
     changes: [
       {

@@ -223,7 +223,7 @@ export function Inicio() {
         const testPayload = {
           success: true,
           status: 'online',
-          model: result.model || 'gemini-2.5-flash',
+          model: result.model || 'gemini-3.1-flash-lite',
           latencyMs: result.latencyMs,
           timestamp: result.timestamp || new Date().toISOString()
         };
@@ -329,17 +329,24 @@ export function Inicio() {
       const nowIso = new Date().toISOString();
 
       // Save extracted data and sync time to Firestore
+      const modelUsed = extractedData.modelUsed || 'gemini-3.1-flash-lite';
+      const latencyMs = extractedData.latencyMs || null;
+
       await setDoc(doc(db, "techniciansList", "current"), {
         ...sanitizedData,
         updatedAt: nowIso,
         geminiLastSync: nowIso,
-        geminiStatus: 'online'
+        geminiStatus: 'online',
+        geminiModel: modelUsed,
+        geminiLatencyMs: latencyMs
       }, { merge: true });
 
       // Update local storage
       const syncObj = {
         success: true,
         status: 'online',
+        model: modelUsed,
+        latencyMs: latencyMs,
         timestamp: nowIso
       };
       setGeminiTestResult(syncObj);

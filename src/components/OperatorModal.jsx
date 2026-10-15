@@ -42,7 +42,7 @@ export function OperatorModal({ isOpen, onClose, currentName, onSaveName }) {
                 <UserCheck className="w-7 h-7 text-white" />
               </div>
               <span className="text-[11px] font-extrabold uppercase tracking-widest text-red-200 bg-red-900/40 px-3 py-0.5 rounded-full mb-1">
-                ServiceDesk ETECC Telecom
+                Service Desk
               </span>
               <h2 className="text-xl font-black tracking-tight">
                 Identificação do Atendente

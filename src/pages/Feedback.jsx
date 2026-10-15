@@ -5,10 +5,13 @@ import {
   Copy, Trash2, AlertTriangle, Info, Check 
 } from 'lucide-react';
 import { DateInputWithCalendar } from '../components/DateInputWithCalendar';
+import { ContactSection } from '../components/ContactSection';
+import { createDefaultContact, normalizeContacts, formatContactsForScript } from '../lib/phoneUtils';
 
 const initialState = {
   nomeCliente: '',
   telefone: '',
+  contatos: [createDefaultContact('', true, '')],
   relatoInicial: '',
   
   solicitouIndicacao: 'Não',
@@ -31,7 +34,10 @@ export function Feedback() {
     let loadedData = { ...initialState };
     if (saved) {
       try {
-        loadedData = { ...loadedData, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        loadedData = { ...loadedData, ...parsed };
+        loadedData.contatos = normalizeContacts(parsed.contatos, parsed.telefone);
+        loadedData.telefone = formatContactsForScript(loadedData.contatos);
       } catch {
         // ignore
       }
@@ -139,9 +145,21 @@ export function Feedback() {
     setErrorFields(prev => prev.filter(field => field !== fieldName));
   };
 
+  const handleContatosChange = (newContatos) => {
+    const formattedStr = formatContactsForScript(newContatos);
+    setFormData(prev => ({
+      ...prev,
+      contatos: newContatos,
+      telefone: formattedStr
+    }));
+    if (newContatos.some(c => c.numero && c.numero.trim() !== '')) {
+      setErrorFields(prev => prev.filter(f => f !== 'telefone'));
+    }
+  };
+
   const validateForm = () => {
     const requiredFields = [
-      'nomeCliente', 'telefone', 'relatoInicial', 
+      'nomeCliente', 'relatoInicial', 
       'conexaoEstabilidade', 'avaliacaoAtendimento'
     ];
     
@@ -152,6 +170,12 @@ export function Feedback() {
         newErrors.push(field);
       }
     });
+
+    const hasValidPhone = formData.contatos?.some(c => c.numero && c.numero.trim() !== '') || 
+      (formData.telefone && formData.telefone.trim() !== '');
+    if (!hasValidPhone) {
+      newErrors.push('telefone');
+    }
 
     if (formData.solicitouIndicacao === 'Sim') {
       if (!formData.respostaIndicacao) newErrors.push('respostaIndicacao');
@@ -186,12 +210,13 @@ export function Feedback() {
 
     const dataUltimo = formatDate(formData.dataUltimoAtendimento) || 'Não informada';
     const operadorFinal = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador') || 'Operador Conectado';
+    const telFinal = formatContactsForScript(formData.contatos) || formData.telefone;
 
     const scriptFinal = `=== SCRIPT DE FEEDBACK ===
 
 === INFORMAÇÕES DO CLIENTE ===
 Nome: ${formData.nomeCliente}
-Telefone: ${formData.telefone}
+Telefone: ${telFinal}
 Relato Inicial: ${formData.relatoInicial}
 
 === PONTOS DE ANÁLISE ===
@@ -218,7 +243,11 @@ Atendente: ${operadorFinal}
 
   const handleClear = () => {
     const atendenteAtual = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador');
-    setFormData({ ...initialState, nomeAtendente: atendenteAtual });
+    setFormData({
+      ...initialState,
+      contatos: [createDefaultContact('', true, '')],
+      nomeAtendente: atendenteAtual 
+    });
     setErrorFields([]);
     setShowClearModal(false);
     showToast("Formulário limpo.", "info");
@@ -268,19 +297,13 @@ Atendente: ${operadorFinal}
                 />
               </div>
               
-              <div>
-                <div className="flex items-center justify-between mb-1.5 min-h-[24px]">
-                  <label className={`${labelClass} mb-0`}>Telefone *</label>
-                </div>
-                <input 
-                  type="text" 
-                  name="telefone" 
-                  value={formData.telefone}
-                  onChange={handleChange}
-                  placeholder="(XX) XXXXX-XXXX"
-                  className={getInputClass('telefone')} 
-                />
-              </div>
+              <ContactSection
+                contatos={formData.contatos}
+                onChangeContatos={handleContatosChange}
+                errorFields={errorFields}
+                showConseguiuContato={false}
+                label="Telefone *"
+              />
 
               <div>
                 <div className="flex items-center justify-between mb-1.5 min-h-[24px]">

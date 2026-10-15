@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { TechniciansRegion } from '../components/TechniciansRegion';
 import { DateInputWithCalendar } from '../components/DateInputWithCalendar';
+import { ContactSection } from '../components/ContactSection';
+import { createDefaultContact, normalizeContacts, formatContactsForScript } from '../lib/phoneUtils';
 
 const initialState = {
   podeAdiantar: '', // Desmarcado por padrão (obrigatório)
@@ -16,6 +18,7 @@ const initialState = {
   horarioApos: '',
   clienteDesde: '',
   contato: '',
+  contatos: [createDefaultContact('', true, '')],
   conseguiuContato: '', // Desmarcado por padrão (obrigatório)
   enderecoAtual: '',
   novoEndereco: '',
@@ -38,6 +41,8 @@ export function MudEndereco() {
       try {
         const parsed = JSON.parse(saved);
         loaded = { ...loaded, ...parsed };
+        loaded.contatos = normalizeContacts(parsed.contatos, parsed.contato);
+        loaded.contato = formatContactsForScript(loaded.contatos);
       } catch {
         // fallback to loaded
       }
@@ -140,10 +145,22 @@ export function MudEndereco() {
     setErrorFields(prev => prev.filter(field => field !== fieldName));
   };
 
+  const handleContatosChange = (newContatos) => {
+    const formattedStr = formatContactsForScript(newContatos);
+    setFormData(prev => ({
+      ...prev,
+      contatos: newContatos,
+      contato: formattedStr
+    }));
+    if (newContatos.some(c => c.numero && c.numero.trim() !== '')) {
+      setErrorFields(prev => prev.filter(f => f !== 'contato'));
+    }
+  };
+
   const validateForm = () => {
     const requiredFields = [
       'podeAdiantar', 'dataAgendamento', 'periodo', 'clienteDesde', 
-      'contato', 'conseguiuContato', 'enderecoAtual', 'novoEndereco', 
+      'conseguiuContato', 'enderecoAtual', 'novoEndereco', 
       'refNovoEndereco', 'comprovante', 'pontoAdicional', 'eteccResolve'
     ];
     
@@ -152,6 +169,12 @@ export function MudEndereco() {
     requiredFields.forEach(field => {
       if (!formData[field]) newErrors.push(field);
     });
+
+    const hasValidContact = formData.contatos?.some(c => c.numero && c.numero.trim() !== '') || 
+      (formData.contato && formData.contato.trim() !== '');
+    if (!hasValidContact) {
+      newErrors.push('contato');
+    }
 
     const operadorAtual = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador');
     if (!operadorAtual) {
@@ -196,6 +219,7 @@ export function MudEndereco() {
     }
 
     const operadorFinal = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador') || '';
+    const contatosFmt = formatContactsForScript(formData.contatos) || formData.contato;
 
     const finalScript = `=== O.S MUDANÇA DE ENDEREÇO ===
 Solicitação: MUDANÇA DE ENDEREÇO
@@ -206,7 +230,7 @@ Taxa: ISENTO${blocoObservacao}
 
 === CLIENTE ===
 Cliente desde: ${formData.clienteDesde}
-Tel: ${formData.contato} (Conseguiu contato: ${formData.conseguiuContato})
+Tel: ${contatosFmt} (Conseguiu contato: ${formData.conseguiuContato})
 
 === ENDEREÇOS ===
 Atual: ${formData.enderecoAtual}
@@ -233,6 +257,7 @@ Atendente: ${operadorFinal}`.trim();
     const op = localStorage.getItem('serviceDesk_operador') || '';
     setFormData({
       ...initialState,
+      contatos: [createDefaultContact('', true, '')],
       nomeAtendente: op 
     });
     setErrorFields([]);
@@ -495,78 +520,18 @@ Atendente: ${operadorFinal}`.trim();
               />
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-1.5 min-h-[24px]">
-                <label className={`${labelClass} mb-0`}>Telefone de Contato *</label>
-              </div>
-              <input 
-                type="text" 
-                name="contato" 
-                value={formData.contato} 
-                onChange={handleChange} 
-                placeholder="(XX) XXXXX-XXXX" 
-                className={getInputClass('contato', 'h-[42px]')} 
+            <div className="sm:col-span-1 lg:col-span-2">
+              <ContactSection
+                contatos={formData.contatos}
+                onChangeContatos={handleContatosChange}
+                conseguiuContato={formData.conseguiuContato}
+                onChangeConseguiuContato={(val) => {
+                  setFormData(prev => ({ ...prev, conseguiuContato: val }));
+                  setErrorFields(prev => prev.filter(f => f !== 'conseguiuContato'));
+                }}
+                errorFields={errorFields}
+                showConseguiuContato={true}
               />
-              <span className="text-[11px] text-slate-400 mt-1 block">
-                Formatação automática de fixo e celular
-              </span>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1.5 min-h-[24px]">
-                <span className={labelClass}>Conseguiu contato? *</span>
-                {formData.conseguiuContato && (
-                  <span className={`text-xs font-bold ${
-                    formData.conseguiuContato === 'Sim' ? 'text-emerald-600' : 'text-red-600'
-                  }`}>
-                    {formData.conseguiuContato}
-                  </span>
-                )}
-              </div>
-
-              <div className={`grid grid-cols-2 p-1 rounded-xl border transition-all h-[42px] items-center ${
-                errorFields.includes('conseguiuContato')
-                  ? 'border-red-500 bg-red-50 ring-1 ring-red-500 animate-error'
-                  : 'border-slate-300 bg-slate-100'
-              }`}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFormData(prev => ({ ...prev, conseguiuContato: 'Sim' }));
-                    setErrorFields(prev => prev.filter(f => f !== 'conseguiuContato'));
-                  }}
-                  className={`h-full px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    formData.conseguiuContato === 'Sim'
-                      ? 'bg-emerald-600 text-white shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                  }`}
-                >
-                  <Check size={14} className={formData.conseguiuContato === 'Sim' ? 'text-white' : 'opacity-30'} />
-                  Sim
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFormData(prev => ({ ...prev, conseguiuContato: 'Não' }));
-                    setErrorFields(prev => prev.filter(f => f !== 'conseguiuContato'));
-                  }}
-                  className={`h-full px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    formData.conseguiuContato === 'Não'
-                      ? 'bg-red-600 text-white shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                  }`}
-                >
-                  <span className={`text-xs ${formData.conseguiuContato === 'Não' ? 'text-white' : 'opacity-30'}`}>✕</span>
-                  Não
-                </button>
-              </div>
-
-              {errorFields.includes('conseguiuContato') && (
-                <p className="text-[10px] font-bold text-red-600 mt-1">
-                  Selecione Sim ou Não.
-                </p>
-              )}
             </div>
           </div>
 

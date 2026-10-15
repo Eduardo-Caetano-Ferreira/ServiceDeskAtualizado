@@ -74,22 +74,26 @@ export function NavBar({
         isCollapsed ? 'w-20' : 'w-64'
       }`}
     >
-      {/* CABEÇALHO / ESPAÇO PARA LOGO DA ETECC TELECOM */}
+      {/* CABEÇALHO / ESPAÇO PARA LOGO SERVICE DESK */}
       <div className={`border-b border-slate-800/80 relative flex items-center shrink-0 transition-all ${
         isCollapsed ? 'p-3 justify-center' : 'p-4 justify-between'
       }`}>
         {isCollapsed ? (
           /* Versão compacta da Logo */
           <div 
-            className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center shadow-md border border-red-500/30 cursor-pointer group"
-            title="ETECC Telecom - Início"
+            className={`w-12 h-12 flex items-center justify-center cursor-pointer group transition-all ${
+              !logoError
+                ? 'bg-transparent'
+                : 'rounded-xl bg-gradient-to-br from-red-600 to-rose-700 shadow-md border border-red-500/30'
+            }`}
+            title="Service Desk - Início"
             onClick={() => setActive('index')}
           >
             {!logoError ? (
               <img 
                 src="/logo.png" 
-                alt="ETECC Telecom" 
-                className="w-9 h-9 object-contain group-hover:scale-105 transition-transform" 
+                alt="Service Desk" 
+                className="w-11 h-11 object-contain drop-shadow-sm group-hover:scale-105 transition-transform" 
                 onLoad={(e) => {
                   if (e.currentTarget.naturalWidth === 0) setLogoError(true);
                 }}
@@ -98,7 +102,7 @@ export function NavBar({
             ) : (
               <div className="flex flex-col items-center justify-center">
                 <Radio className="w-5 h-5 text-white animate-pulse" />
-                <span className="text-[8px] font-black text-white leading-none mt-0.5">ET</span>
+                <span className="text-[8px] font-black text-white leading-none mt-0.5">SD</span>
               </div>
             )}
           </div>
@@ -109,12 +113,16 @@ export function NavBar({
             onClick={() => setActive('index')}
           >
             {/* Contêiner da Logo */}
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center shrink-0 shadow-md border border-red-500/30 overflow-hidden">
+            <div className={`w-11 h-11 flex items-center justify-center shrink-0 transition-all ${
+              !logoError
+                ? 'bg-transparent overflow-visible'
+                : 'rounded-xl bg-gradient-to-br from-red-600 to-rose-700 shadow-md border border-red-500/30 overflow-hidden'
+            }`}>
               {!logoError ? (
                 <img 
                   src="/logo.png" 
-                  alt="ETECC Telecom" 
-                  className="w-8 h-8 object-contain group-hover:scale-105 transition-transform"
+                  alt="Service Desk" 
+                  className="w-11 h-11 object-contain drop-shadow-sm group-hover:scale-105 transition-transform"
                   onLoad={(e) => {
                     if (e.currentTarget.naturalWidth === 0) setLogoError(true);
                   }}
@@ -125,18 +133,18 @@ export function NavBar({
               )}
             </div>
 
-            {/* Nome da Marca ETECC Telecom */}
+            {/* Nome da Marca SERVICE DESK */}
             <div className="flex flex-col overflow-hidden">
               <div className="flex items-center gap-1.5">
                 <span className="font-extrabold text-base tracking-tight text-white group-hover:text-red-400 transition-colors">
-                  ETECC
+                  SERVICE
                 </span>
                 <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 bg-red-600/25 text-red-400 rounded border border-red-500/30">
-                  v1.3
+                  v1.5
                 </span>
               </div>
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-0.5">
-                TELECOM
+                DESK
               </span>
             </div>
           </div>
@@ -243,7 +251,7 @@ export function NavBar({
           <button
             type="button"
             onClick={() => setActive('changelog')}
-            title={isCollapsed ? 'Changelog v1.2' : undefined}
+            title={isCollapsed ? 'Changelog v1.5' : undefined}
             className={`w-full flex items-center transition-all duration-150 rounded-xl cursor-pointer group relative ${
               isCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2'
             } ${
@@ -269,7 +277,7 @@ export function NavBar({
             {!isCollapsed && (
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-bold text-slate-400 bg-slate-800/90 px-1.5 py-0.5 rounded border border-slate-700/60">
-                  v1.3
+                  v1.5
                 </span>
                 <Sparkles size={11} className="text-amber-400/80" />
               </div>
@@ -280,7 +288,7 @@ export function NavBar({
               <div className="absolute left-full ml-3 px-2.5 py-1 bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-slate-700">
                 <span>Changelog & Novidades</span>
                 <span className="ml-1.5 text-[9px] bg-slate-700 text-slate-300 px-1 py-0.5 rounded font-bold">
-                  v1.3
+                  v1.5
                 </span>
               </div>
             )}

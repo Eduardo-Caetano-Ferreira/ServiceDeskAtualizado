@@ -28,6 +28,11 @@ const changelogData = [
         type: 'novo',
         title: 'Diagnóstico de Modelo e Latência em Tempo Real',
         description: 'Exibição do modelo exato que processou a imagem e a latência de processamento em milissegundos tanto no teste de comunicação quanto na extração de técnicos.'
+      },
+      {
+        type: 'novo',
+        title: 'Gestão Inteligente de Contatos e Máscara +55',
+        description: 'Detecção automática quando o número inicia com DDI 55, aplicando máscara no formato +55 (XX) XXXXX-XXXX ou +55 (XX) XXXX-XXXX. Suporte para adicionar múltiplas linhas de contato através do botão (+), check de identificação do número do Titular e campo de identificação/nome para números de terceiros (ex: Esposa, Filho, Maria).'
       }
     ]
   },
@@ -247,11 +252,11 @@ export function Changelog() {
                   Histórico de Versões
                 </h1>
                 <span className="bg-red-600 text-white font-extrabold text-xs px-2.5 py-0.5 rounded-full shadow-xs">
-                  v1.3
+                  v1.5
                 </span>
               </div>
               <p className="text-slate-500 text-xs sm:text-sm mt-1">
-                Acompanhe as atualizações, novos recursos e melhorias contínuas do ServiceDesk ETECC Telecom.
+                Acompanhe as atualizações, novos recursos e melhorias contínuas do Service Desk.
               </p>
             </div>
           </div>

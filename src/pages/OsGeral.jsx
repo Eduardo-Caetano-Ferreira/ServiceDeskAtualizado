@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { TechniciansRegion } from '../components/TechniciansRegion';
 import { DateInputWithCalendar } from '../components/DateInputWithCalendar';
+import { ContactSection } from '../components/ContactSection';
+import { createDefaultContact, normalizeContacts, formatContactsForScript } from '../lib/phoneUtils';
 
 const initialState = {
   dataAgendamento: '',
@@ -14,6 +16,7 @@ const initialState = {
   roteador: '',
   onu: '',
   contato: '',
+  contatos: [createDefaultContact('', true, '')],
   conseguiuContato: '', // Padrão vazio para obrigar o operador a selecionar antes de copiar
   clienteDesde: '',
   solicitacao: '',
@@ -37,7 +40,10 @@ export function OsGeral() {
     
     if (savedForm) {
       try {
-        loadedData = { ...loadedData, ...JSON.parse(savedForm) };
+        const parsed = JSON.parse(savedForm);
+        loadedData = { ...loadedData, ...parsed };
+        loadedData.contatos = normalizeContacts(parsed.contatos, parsed.contato);
+        loadedData.contato = formatContactsForScript(loadedData.contatos);
       } catch (e) {
         console.error("Erro ao carregar dados", e);
       }
@@ -158,10 +164,22 @@ export function OsGeral() {
     setErrorFields(prev => prev.filter(field => field !== fieldName));
   };
 
+  const handleContatosChange = (newContatos) => {
+    const formattedStr = formatContactsForScript(newContatos);
+    setFormData(prev => ({
+      ...prev,
+      contatos: newContatos,
+      contato: formattedStr
+    }));
+    if (newContatos.some(c => c.numero && c.numero.trim() !== '')) {
+      setErrorFields(prev => prev.filter(f => f !== 'contato'));
+    }
+  };
+
   const validateForm = () => {
     const requiredFields = [
       'dataAgendamento', 'periodo', 'roteador', 'onu', 
-      'contato', 'conseguiuContato', 'clienteDesde', 'solicitacao', 'sinalStatus'
+      'conseguiuContato', 'clienteDesde', 'solicitacao', 'sinalStatus'
     ];
     
     let newErrors = [];
@@ -169,6 +187,12 @@ export function OsGeral() {
     requiredFields.forEach(field => {
       if (!formData[field]) newErrors.push(field);
     });
+
+    const hasValidContact = formData.contatos?.some(c => c.numero && c.numero.trim() !== '') || 
+      (formData.contato && formData.contato.trim() !== '');
+    if (!hasValidContact) {
+      newErrors.push('contato');
+    }
 
     const op = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador');
     if (!op) {
@@ -213,6 +237,7 @@ export function OsGeral() {
     }
 
     const atendenteAtual = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador') || '';
+    const contatosFmt = formatContactsForScript(formData.contatos) || formData.contato;
 
     const finalScript = `=== AGENDAMENTO ===
 DATA: ${dataAgend}
@@ -221,7 +246,7 @@ PERÍODO: ${periodoFmt}
 === INFORMAÇÕES DO CLIENTE ===
 Roteador: ${formData.roteador}
 ONU: ${formData.onu}
-Contato: ${formData.contato} (Conseguiu contato: ${formData.conseguiuContato})
+Contato: ${contatosFmt} (Conseguiu contato: ${formData.conseguiuContato})
 Cliente desde: ${formData.clienteDesde}
 
 === DETALHES DA SOLICITAÇÃO ===
@@ -250,6 +275,7 @@ ${scriptExcecao}`.trim();
     
     const clearedState = {
       ...initialState,
+      contatos: [createDefaultContact('', true, '')],
       conseguiuContato: '',
       nomeAtendente: operadorGlobal 
     };
@@ -448,75 +474,19 @@ ${scriptExcecao}`.trim();
               </div>
             </div>
 
-            {/* Contato com Máscara e Switch Sim/Não */}
+            {/* Seção de Contatos com Máscara +55, Múltiplas Linhas, Titular e Switch */}
             <div className="sm:col-span-2 xl:col-span-1">
-              <label className={labelClass}>Contato *</label>
-              <input 
-                type="text" 
-                name="contato" 
-                value={formData.contato} 
-                onChange={handleChange} 
-                placeholder="(XX) XXXXX-XXXX" 
-                className={getInputClass('contato')} 
+              <ContactSection
+                contatos={formData.contatos}
+                onChangeContatos={handleContatosChange}
+                conseguiuContato={formData.conseguiuContato}
+                onChangeConseguiuContato={(val) => {
+                  setFormData(prev => ({ ...prev, conseguiuContato: val }));
+                  setErrorFields(prev => prev.filter(f => f !== 'conseguiuContato'));
+                }}
+                errorFields={errorFields}
+                showConseguiuContato={true}
               />
-              
-              {/* SWITCH SIM / NÃO PARA CONSEGUIU CONTATO */}
-              <div className="mt-2.5">
-                <span className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
-                  <span>Conseguiu contato? *</span>
-                  {formData.conseguiuContato && (
-                    <span className={`text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
-                      formData.conseguiuContato === 'Sim' ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'
-                    }`}>
-                      {formData.conseguiuContato}
-                    </span>
-                  )}
-                </span>
-                
-                <div className={`grid grid-cols-2 p-1 rounded-xl border transition-all ${
-                  errorFields.includes('conseguiuContato')
-                    ? 'border-red-500 bg-red-50 ring-1 ring-red-500 animate-error'
-                    : 'border-slate-300 bg-slate-100'
-                }`}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormData(prev => ({ ...prev, conseguiuContato: 'Sim' }));
-                      setErrorFields(prev => prev.filter(f => f !== 'conseguiuContato'));
-                    }}
-                    className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      formData.conseguiuContato === 'Sim'
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                    }`}
-                  >
-                    <Check size={13} className={formData.conseguiuContato === 'Sim' ? 'text-white' : 'opacity-30'} />
-                    Sim
-                  </button>
-                  
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormData(prev => ({ ...prev, conseguiuContato: 'Não' }));
-                      setErrorFields(prev => prev.filter(f => f !== 'conseguiuContato'));
-                    }}
-                    className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      formData.conseguiuContato === 'Não'
-                        ? 'bg-red-600 text-white shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                    }`}
-                  >
-                    <span className={`text-xs ${formData.conseguiuContato === 'Não' ? 'text-white' : 'opacity-30'}`}>✕</span>
-                    Não
-                  </button>
-                </div>
-
-                {errorFields.includes('conseguiuContato') && (
-                  <p className="text-[10px] font-bold text-red-600 mt-1">
-                    Selecione Sim ou Não.
-                  </p>
-                )}
-              </div>
             </div>
 
             <div className="sm:col-span-2 xl:col-span-1">

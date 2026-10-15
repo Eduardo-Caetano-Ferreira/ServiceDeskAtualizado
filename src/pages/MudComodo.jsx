@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { TechniciansRegion } from '../components/TechniciansRegion';
 import { DateInputWithCalendar } from '../components/DateInputWithCalendar';
+import { ContactSection } from '../components/ContactSection';
+import { createDefaultContact, normalizeContacts, formatContactsForScript } from '../lib/phoneUtils';
 
 const initialState = {
   dataAgendamento: '',
@@ -14,6 +16,7 @@ const initialState = {
   roteador: '',
   onu: '',
   contato: '',
+  contatos: [createDefaultContact('', true, '')],
   conseguiuContato: '', // Desmarcado por padrão (obrigatório)
   clienteDesde: '',
   solicitacao: '',
@@ -33,7 +36,10 @@ export function MudComodo() {
     let loaded = { ...initialState };
     if (saved) {
       try {
-        loaded = { ...loaded, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        loaded = { ...loaded, ...parsed };
+        loaded.contatos = normalizeContacts(parsed.contatos, parsed.contato);
+        loaded.contato = formatContactsForScript(loaded.contatos);
       } catch {
         // fallback
       }
@@ -196,11 +202,23 @@ export function MudComodo() {
     setErrorFields(prev => prev.filter(field => field !== fieldName));
   };
 
+  const handleContatosChange = (newContatos) => {
+    const formattedStr = formatContactsForScript(newContatos);
+    setFormData(prev => ({
+      ...prev,
+      contatos: newContatos,
+      contato: formattedStr
+    }));
+    if (newContatos.some(c => c.numero && c.numero.trim() !== '')) {
+      setErrorFields(prev => prev.filter(f => f !== 'contato'));
+    }
+  };
+
   // Lógica de validação
   const validateForm = () => {
     const requiredFields = [
       'dataAgendamento', 'periodo', 'roteador', 'onu', 
-      'contato', 'conseguiuContato', 'clienteDesde', 'solicitacao'
+      'conseguiuContato', 'clienteDesde', 'solicitacao'
     ];
     
     let newErrors = [];
@@ -208,6 +226,12 @@ export function MudComodo() {
     requiredFields.forEach(field => {
       if (!formData[field]) newErrors.push(field);
     });
+
+    const hasValidContact = formData.contatos?.some(c => c.numero && c.numero.trim() !== '') || 
+      (formData.contato && formData.contato.trim() !== '');
+    if (!hasValidContact) {
+      newErrors.push('contato');
+    }
 
     const operadorAtual = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador');
     if (!operadorAtual) {
@@ -259,6 +283,7 @@ export function MudComodo() {
     }
 
     const operadorFinal = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador') || '';
+    const contatosFmt = formatContactsForScript(formData.contatos) || formData.contato;
 
     const finalScript = `=== O.S MUDANÇA DE CÔMODO ===
 Data: ${dataAgend}
@@ -267,7 +292,7 @@ Período: ${periodoFmt}
 === INFORMAÇÕES DO CLIENTE ===
 Roteador: ${formData.roteador}
 ONU: ${formData.onu}
-Contato: ${formData.contato} (Conseguiu contato: ${formData.conseguiuContato})
+Contato: ${contatosFmt} (Conseguiu contato: ${formData.conseguiuContato})
 Cliente desde: ${formData.clienteDesde}
 
 === DETALHES O.S ===
@@ -290,6 +315,7 @@ Atendente: ${operadorFinal}`.trim();
     const operadorGlobal = localStorage.getItem('serviceDesk_operador') || '';
     setFormData({
       ...initialState,
+      contatos: [createDefaultContact('', true, '')],
       conseguiuContato: '',
       nomeAtendente: operadorGlobal 
     });
@@ -461,77 +487,19 @@ Atendente: ${operadorFinal}`.trim();
               </div>
             </div>
 
-            {/* Contato com Máscara e Switch Sim/Não */}
+            {/* Seção de Contatos com Máscara +55, Múltiplas Linhas, Titular e Switch */}
             <div className="sm:col-span-2 xl:col-span-1">
-              <div className="flex items-center justify-between mb-1.5 min-h-[24px]">
-                <label className={`${labelClass} mb-0`}>Contato *</label>
-              </div>
-              <input 
-                type="text" 
-                name="contato" 
-                value={formData.contato} 
-                onChange={handleChange} 
-                placeholder="(XX) XXXXX-XXXX" 
-                className={getInputClass('contato')} 
+              <ContactSection
+                contatos={formData.contatos}
+                onChangeContatos={handleContatosChange}
+                conseguiuContato={formData.conseguiuContato}
+                onChangeConseguiuContato={(val) => {
+                  setFormData(prev => ({ ...prev, conseguiuContato: val }));
+                  setErrorFields(prev => prev.filter(f => f !== 'conseguiuContato'));
+                }}
+                errorFields={errorFields}
+                showConseguiuContato={true}
               />
-              
-              {/* SWITCH SIM / NÃO PARA CONSEGUIU CONTATO */}
-              <div className="mt-2.5">
-                <div className="flex items-center justify-between mb-1.5 min-h-[24px]">
-                  <span className="block text-xs font-semibold text-slate-700">Conseguiu contato? *</span>
-                  {formData.conseguiuContato && (
-                    <span className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
-                      formData.conseguiuContato === 'Sim' ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'
-                    }`}>
-                      {formData.conseguiuContato}
-                    </span>
-                  )}
-                </div>
-                
-                <div className={`grid grid-cols-2 p-1 rounded-xl border transition-all h-[42px] items-center ${
-                  errorFields.includes('conseguiuContato')
-                    ? 'border-red-500 bg-red-50 ring-1 ring-red-500 animate-error'
-                    : 'border-slate-300 bg-slate-100'
-                }`}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormData(prev => ({ ...prev, conseguiuContato: 'Sim' }));
-                      setErrorFields(prev => prev.filter(f => f !== 'conseguiuContato'));
-                    }}
-                    className={`h-full px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                      formData.conseguiuContato === 'Sim'
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                    }`}
-                  >
-                    <Check size={13} className={formData.conseguiuContato === 'Sim' ? 'text-white' : 'opacity-30'} />
-                    Sim
-                  </button>
-                  
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormData(prev => ({ ...prev, conseguiuContato: 'Não' }));
-                      setErrorFields(prev => prev.filter(f => f !== 'conseguiuContato'));
-                    }}
-                    className={`h-full px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                      formData.conseguiuContato === 'Não'
-                        ? 'bg-red-600 text-white shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                    }`}
-                  >
-                    <span className={`text-xs ${formData.conseguiuContato === 'Não' ? 'text-white' : 'opacity-30'}`}>✕</span>
-                    Não
-                  </button>
-                </div>
-
-                {errorFields.includes('conseguiuContato') && (
-                  <p className="text-[10px] font-bold text-red-600 mt-1">
-                    Selecione Sim ou Não.
-                  </p>
-                )}
-              </div>
             </div>
 
             {/* Cliente Desde */}

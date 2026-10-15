@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { TechniciansRegion } from '../components/TechniciansRegion';
 import { DateInputWithCalendar } from '../components/DateInputWithCalendar';
+import { ContactSection } from '../components/ContactSection';
+import { createDefaultContact, normalizeContacts, formatContactsForScript } from '../lib/phoneUtils';
 
 const initialState = {
   dataAgendamento: '',
@@ -13,6 +15,7 @@ const initialState = {
   horarioApos: '',
   solicitacao: '',
   contato: '',
+  contatos: [createDefaultContact('', true, '')],
   conseguiuContato: '', // Desmarcado por padrão (obrigatório)
   planoAtual: '',
   roteadorPrincipal: '',
@@ -48,7 +51,10 @@ export function PontoAdicional() {
     let loadedData = { ...initialState };
     if (saved) {
       try {
-        loadedData = { ...loadedData, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        loadedData = { ...loadedData, ...parsed };
+        loadedData.contatos = normalizeContacts(parsed.contatos, parsed.contato);
+        loadedData.contato = formatContactsForScript(loadedData.contatos);
       } catch {
         // ignore
       }
@@ -226,10 +232,22 @@ export function PontoAdicional() {
     setErrorFields(prev => prev.filter(field => field !== fieldName));
   };
 
+  const handleContatosChange = (newContatos) => {
+    const formattedStr = formatContactsForScript(newContatos);
+    setFormData(prev => ({
+      ...prev,
+      contatos: newContatos,
+      contato: formattedStr
+    }));
+    if (newContatos.some(c => c.numero && c.numero.trim() !== '')) {
+      setErrorFields(prev => prev.filter(f => f !== 'contato'));
+    }
+  };
+
   // Lógica de Validação
   const validateForm = () => {
     const requiredFields = [
-      'dataAgendamento', 'periodo', 'solicitacao', 'contato', 'conseguiuContato', 
+      'dataAgendamento', 'periodo', 'solicitacao', 'conseguiuContato', 
       'planoAtual', 'roteadorPrincipal', 'onuPrincipal'
     ];
     
@@ -240,6 +258,12 @@ export function PontoAdicional() {
         newErrors.push(field);
       }
     });
+
+    const hasValidContact = formData.contatos?.some(c => c.numero && c.numero.trim() !== '') || 
+      (formData.contato && formData.contato.trim() !== '');
+    if (!hasValidContact) {
+      newErrors.push('contato');
+    }
 
     if (formData.periodo === 'Após' && !formData.horarioApos?.trim()) {
       newErrors.push('horarioApos');
@@ -320,6 +344,7 @@ export function PontoAdicional() {
     }
 
     const operadorFinal = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador') || 'Operador Conectado';
+    const contatosFmt = formatContactsForScript(formData.contatos) || formData.contato;
 
     const scriptFinal = `=== O.S PONTO ADICIONAL ===
 Data: ${dataAgend}
@@ -327,7 +352,7 @@ Período: ${periodoFmt}
 Solicitação: ${formData.solicitacao}
 
 === INFORMAÇÕES DO CLIENTE ===
-Contato: ${formData.contato} (Conseguiu contato: ${formData.conseguiuContato || 'Não informado'})
+Contato: ${contatosFmt} (Conseguiu contato: ${formData.conseguiuContato || 'Não informado'})
 Plano Atual: ${formData.planoAtual}
 Roteador: ${formData.roteadorPrincipal}
 ONU: ${formData.onuPrincipal}
@@ -357,7 +382,11 @@ Atendente: ${operadorFinal}
 
   const handleClear = () => {
     const atendenteAtual = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador');
-    setFormData({ ...initialState, nomeAtendente: atendenteAtual });
+    setFormData({
+      ...initialState,
+      contatos: [createDefaultContact('', true, '')],
+      nomeAtendente: atendenteAtual 
+    });
     setErrorFields([]);
     setShowClearModal(false);
     showToast("Formulário limpo.", "info");
@@ -572,77 +601,19 @@ Atendente: ${operadorFinal}
               </div>
             </div>
 
-            {/* Contato com Máscara e Switch Conseguiu Contato */}
+            {/* Seção de Contatos com Máscara +55, Múltiplas Linhas, Titular e Switch */}
             <div className="sm:col-span-2 xl:col-span-1">
-              <div className="flex items-center justify-between mb-1.5 min-h-[24px]">
-                <label className={`${labelClass} mb-0`}>Contato *</label>
-              </div>
-              <input 
-                type="text" 
-                name="contato" 
-                value={formData.contato} 
-                onChange={handleChange} 
-                placeholder="(XX) XXXXX-XXXX" 
-                className={getInputClass('contato')} 
+              <ContactSection
+                contatos={formData.contatos}
+                onChangeContatos={handleContatosChange}
+                conseguiuContato={formData.conseguiuContato}
+                onChangeConseguiuContato={(val) => {
+                  setFormData(prev => ({ ...prev, conseguiuContato: val }));
+                  setErrorFields(prev => prev.filter(f => f !== 'conseguiuContato'));
+                }}
+                errorFields={errorFields}
+                showConseguiuContato={true}
               />
-              
-              {/* SWITCH SIM / NÃO PARA CONSEGUIU CONTATO */}
-              <div className="mt-2.5">
-                <div className="flex items-center justify-between mb-1.5 min-h-[24px]">
-                  <span className="block text-xs font-semibold text-slate-700">Conseguiu contato? *</span>
-                  {formData.conseguiuContato && (
-                    <span className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
-                      formData.conseguiuContato === 'Sim' ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'
-                    }`}>
-                      {formData.conseguiuContato}
-                    </span>
-                  )}
-                </div>
-                
-                <div className={`grid grid-cols-2 p-1 rounded-xl border transition-all h-[42px] items-center ${
-                  errorFields.includes('conseguiuContato')
-                    ? 'border-red-500 bg-red-50 ring-1 ring-red-500 animate-error'
-                    : 'border-slate-300 bg-slate-100'
-                }`}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormData(prev => ({ ...prev, conseguiuContato: 'Sim' }));
-                      setErrorFields(prev => prev.filter(f => f !== 'conseguiuContato'));
-                    }}
-                    className={`h-full px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                      formData.conseguiuContato === 'Sim'
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                    }`}
-                  >
-                    <Check size={13} className={formData.conseguiuContato === 'Sim' ? 'text-white' : 'opacity-30'} />
-                    Sim
-                  </button>
-                  
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormData(prev => ({ ...prev, conseguiuContato: 'Não' }));
-                      setErrorFields(prev => prev.filter(f => f !== 'conseguiuContato'));
-                    }}
-                    className={`h-full px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                      formData.conseguiuContato === 'Não'
-                        ? 'bg-red-600 text-white shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                    }`}
-                  >
-                    <span className={`text-xs ${formData.conseguiuContato === 'Não' ? 'text-white' : 'opacity-30'}`}>✕</span>
-                    Não
-                  </button>
-                </div>
-
-                {errorFields.includes('conseguiuContato') && (
-                  <p className="text-[10px] font-bold text-red-600 mt-1">
-                    Selecione Sim ou Não.
-                  </p>
-                )}
-              </div>
             </div>
 
             {/* Plano Atual & Cliente Desde */}

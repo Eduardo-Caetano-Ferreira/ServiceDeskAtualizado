@@ -11,7 +11,7 @@ import { createDefaultContact, normalizeContacts, formatContactsForScript } from
 const initialState = {
   nomeCliente: '',
   telefone: '',
-  contatos: [createDefaultContact('', true, '')],
+  contatos: [createDefaultContact('', false, '')],
   relatoInicial: '',
   
   solicitouIndicacao: 'Não',
@@ -245,7 +245,7 @@ Atendente: ${operadorFinal}
     const atendenteAtual = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador');
     setFormData({
       ...initialState,
-      contatos: [createDefaultContact('', true, '')],
+      contatos: [createDefaultContact('', false, '')],
       nomeAtendente: atendenteAtual 
     });
     setErrorFields([]);

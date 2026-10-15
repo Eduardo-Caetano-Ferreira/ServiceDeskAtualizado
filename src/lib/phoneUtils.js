@@ -53,7 +53,7 @@ export const formatPhone = (value) => {
 /**
  * Cria um objeto de contato padrão
  */
-export const createDefaultContact = (numero = '', isTitular = true, nome = '') => ({
+export const createDefaultContact = (numero = '', isTitular = false, nome = '') => ({
   id: `c_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
   numero: formatPhone(numero),
   isTitular: Boolean(isTitular),
@@ -68,16 +68,16 @@ export const normalizeContacts = (savedContatos, fallbackString = '') => {
     return savedContatos.map((c, idx) => ({
       id: c.id || `c_${idx}_${Math.random().toString(36).substr(2, 5)}`,
       numero: formatPhone(c.numero || ''),
-      isTitular: c.isTitular !== undefined ? c.isTitular : idx === 0,
+      isTitular: Boolean(c.isTitular),
       nome: c.nome || ''
     }));
   }
 
   if (fallbackString && fallbackString.trim()) {
-    return [createDefaultContact(fallbackString, true, '')];
+    return [createDefaultContact(fallbackString, false, '')];
   }
 
-  return [createDefaultContact('', true, '')];
+  return [createDefaultContact('', false, '')];
 };
 
 /**
@@ -94,9 +94,11 @@ export const formatContactsForScript = (contatos) => {
   return valid.map(c => {
     const num = c.numero.trim();
     if (c.isTitular) {
-      return `${num} (Titular${c.nome && c.nome.trim() ? ` - ${c.nome.trim()}` : ''})`;
+      return `${num} (Titular)`;
     }
-    const rotulo = c.nome && c.nome.trim() ? c.nome.trim() : 'Recado';
-    return `${num} (${rotulo})`;
+    if (c.nome && c.nome.trim()) {
+      return `${num} (${c.nome.trim()})`;
+    }
+    return num;
   }).join(' / ');
 };

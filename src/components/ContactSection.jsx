@@ -22,7 +22,7 @@ export function ContactSection({
   // Garante que haja ao menos um contato na lista
   const contactsList = Array.isArray(contatos) && contatos.length > 0 
     ? contatos 
-    : [createDefaultContact('', true, '')];
+    : [createDefaultContact('', false, '')];
 
   const handlePhoneChange = (id, rawValue) => {
     const formatted = formatPhone(rawValue);
@@ -45,28 +45,35 @@ export function ContactSection({
     onChangeContatos(updated);
   };
 
-  const handleSetTitular = (id) => {
-    const updated = contactsList.map(c => ({
-      ...c,
-      isTitular: c.id === id
-    }));
+  const handleToggleTitular = (id) => {
+    const updated = contactsList.map(c => {
+      if (c.id === id) {
+        const nextIsTitular = !c.isTitular;
+        return {
+          ...c,
+          isTitular: nextIsTitular,
+          // Se marcar como Titular, limpa o campo de nome para que fique somente o indicador de Titular
+          nome: nextIsTitular ? '' : c.nome
+        };
+      }
+      // Se este contato foi marcado como titular, desmarca os demais
+      return {
+        ...c,
+        isTitular: false
+      };
+    });
     onChangeContatos(updated);
   };
 
   const handleAddContact = () => {
-    // Novo contato adicionado por padrão não é titular se já existir um titular
-    const hasTitular = contactsList.some(c => c.isTitular);
-    const newContact = createDefaultContact('', !hasTitular, '');
+    // Novo contato adicionado vem desmarcado por padrão
+    const newContact = createDefaultContact('', false, '');
     onChangeContatos([...contactsList, newContact]);
   };
 
   const handleRemoveContact = (id) => {
     if (contactsList.length <= 1) return;
     const remaining = contactsList.filter(c => c.id !== id);
-    // Se removeu o titular, torna o primeiro restante como titular
-    if (!remaining.some(c => c.isTitular) && remaining.length > 0) {
-      remaining[0].isTitular = true;
-    }
     onChangeContatos(remaining);
   };
 
@@ -120,16 +127,20 @@ export function ContactSection({
               <div className="flex items-center justify-between gap-2 mb-1.5">
                 <button
                   type="button"
-                  onClick={() => handleSetTitular(contact.id)}
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer border ${
+                  onClick={() => handleToggleTitular(contact.id)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer border ${
                     contact.isTitular
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
                       : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400 hover:text-slate-800'
                   }`}
-                  title="Marcar este número como sendo do Titular"
+                  title={contact.isTitular ? "Clique para desmarcar como Titular" : "Clique para marcar como Titular"}
                 >
-                  <Check size={12} className={contact.isTitular ? 'text-white stroke-[3]' : 'opacity-30'} />
-                  <span>{contact.isTitular ? 'Titular' : 'Marcar como Titular'}</span>
+                  <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border transition-all ${
+                    contact.isTitular ? 'bg-white border-white text-emerald-600' : 'border-slate-400 bg-white'
+                  }`}>
+                    {contact.isTitular && <Check size={11} className="stroke-[3]" />}
+                  </div>
+                  <span>Titular</span>
                 </button>
 
                 {!isOnlyOne && (
@@ -160,12 +171,12 @@ export function ContactSection({
                 />
               </div>
 
-              {/* Se não for titular, exibe campo para nome de quem é o número */}
+              {/* Quando Titular estiver desmarcado, apresenta o campo de texto para pôr o nome */}
               {!contact.isTitular && (
-                <div className="mt-1.5 flex items-center gap-1.5">
+                <div className="mt-2 flex items-center gap-1.5">
                   <div className="relative flex-1">
                     <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
-                      <User size={12} />
+                      <User size={13} />
                     </div>
                     <input
                       type="text"
@@ -173,7 +184,7 @@ export function ContactSection({
                       onChange={(e) => handleNomeChange(contact.id, e.target.value)}
                       placeholder="Nome de quem é o número (ex: Esposa, Filho, Maria)"
                       disabled={disabled}
-                      className="w-full pl-7 pr-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-white text-slate-800 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all placeholder:text-slate-400"
+                      className="w-full pl-7 pr-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white text-slate-800 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all placeholder:text-slate-400"
                     />
                   </div>
                 </div>

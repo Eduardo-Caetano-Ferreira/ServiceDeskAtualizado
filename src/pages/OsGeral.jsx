@@ -16,7 +16,7 @@ const initialState = {
   roteador: '',
   onu: '',
   contato: '',
-  contatos: [createDefaultContact('', true, '')],
+  contatos: [createDefaultContact('', false, '')],
   conseguiuContato: '', // Padrão vazio para obrigar o operador a selecionar antes de copiar
   clienteDesde: '',
   solicitacao: '',
@@ -275,7 +275,7 @@ ${scriptExcecao}`.trim();
     
     const clearedState = {
       ...initialState,
-      contatos: [createDefaultContact('', true, '')],
+      contatos: [createDefaultContact('', false, '')],
       conseguiuContato: '',
       nomeAtendente: operadorGlobal 
     };

@@ -16,7 +16,7 @@ const initialState = {
   roteador: '',
   onu: '',
   contato: '',
-  contatos: [createDefaultContact('', true, '')],
+  contatos: [createDefaultContact('', false, '')],
   conseguiuContato: '', // Desmarcado por padrão (obrigatório)
   clienteDesde: '',
   solicitacao: '',
@@ -315,7 +315,7 @@ Atendente: ${operadorFinal}`.trim();
     const operadorGlobal = localStorage.getItem('serviceDesk_operador') || '';
     setFormData({
       ...initialState,
-      contatos: [createDefaultContact('', true, '')],
+      contatos: [createDefaultContact('', false, '')],
       conseguiuContato: '',
       nomeAtendente: operadorGlobal 
     });

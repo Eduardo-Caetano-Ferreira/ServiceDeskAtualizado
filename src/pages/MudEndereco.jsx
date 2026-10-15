@@ -18,7 +18,7 @@ const initialState = {
   horarioApos: '',
   clienteDesde: '',
   contato: '',
-  contatos: [createDefaultContact('', true, '')],
+  contatos: [createDefaultContact('', false, '')],
   conseguiuContato: '', // Desmarcado por padrão (obrigatório)
   enderecoAtual: '',
   novoEndereco: '',
@@ -257,7 +257,7 @@ Atendente: ${operadorFinal}`.trim();
     const op = localStorage.getItem('serviceDesk_operador') || '';
     setFormData({
       ...initialState,
-      contatos: [createDefaultContact('', true, '')],
+      contatos: [createDefaultContact('', false, '')],
       nomeAtendente: op 
     });
     setErrorFields([]);

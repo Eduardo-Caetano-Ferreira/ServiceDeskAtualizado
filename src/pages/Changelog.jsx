@@ -9,9 +9,37 @@ import {
 
 const changelogData = [
   {
+    version: '1.6',
+    releaseDate: '17 de Outubro de 2026',
+    isLatest: true,
+    highlight: 'Modo Escuro Suave para maior conforto visual e redução do cansaço visual em jornadas diárias, com botão de alternância estilo Switch.',
+    changes: [
+      {
+        type: 'novo',
+        title: 'Modo Escuro Suave (Dark Mode)',
+        description: 'Implementação de tema escuro com paleta suave e relaxante para os olhos, eliminando contrastes agressivos e mantendo legibilidade ideal em todos os formulários, painéis, tabelas e modais.'
+      },
+      {
+        type: 'novo',
+        title: 'Botão de Alternância Estilo Switch',
+        description: 'Controle moderno e intuitivo no estilo Switch com ícones de Sol e Lua na barra lateral e atalho no topo da tela, permitindo alternar instantaneamente entre o Modo Claro e o Modo Escuro Suave a qualquer momento.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Paleta Anti-Fadiga e Alta Visibilidade',
+        description: 'Cores balanceadas com tons suaves de ardósia (slate), superfícies elevadas e contraste equilibrado que proporcionam conforto visual durante jornadas contínuas sem cansar a visão.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Persistência Automática de Preferência',
+        description: 'A preferência de tema é memorizada localmente no navegador, mantendo o modo escolhido mesmo após atualizar a página ou fechar o sistema.'
+      }
+    ]
+  },
+  {
     version: '1.5',
     releaseDate: '15 de Outubro de 2026',
-    isLatest: true,
+    isLatest: false,
     highlight: 'Correção e Alta Disponibilidade na Leitura de Imagens com IA: migração para a versão Lite prioritária (gemini-3.1-flash-lite) e fallback automático em cascata entre versões.',
     changes: [
       {
@@ -252,7 +280,7 @@ export function Changelog() {
                   Histórico de Versões
                 </h1>
                 <span className="bg-red-600 text-white font-extrabold text-xs px-2.5 py-0.5 rounded-full shadow-xs">
-                  v1.5
+                  v1.6
                 </span>
               </div>
               <p className="text-slate-500 text-xs sm:text-sm mt-1">
@@ -265,7 +293,7 @@ export function Changelog() {
         <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 shrink-0">
           <div className="text-right px-2">
             <span className="block text-[10px] uppercase font-bold text-slate-400">Versão Atual</span>
-            <span className="text-sm font-extrabold text-slate-800">1.3.0 Produção</span>
+            <span className="text-sm font-extrabold text-slate-800">1.6 Produção</span>
           </div>
           <div className="w-9 h-9 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-black shadow-xs">
             <Zap className="w-5 h-5" />

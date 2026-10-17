@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { ThemeProvider } from './context/ThemeContext';
+import { useTheme } from './context/themeCore';
 import { NavBar } from './components/NavBar';
 import { OsGeral } from './pages/OsGeral';
 import { MudEndereco } from './pages/MudEndereco';
@@ -11,8 +13,9 @@ import { Inicio } from './pages/Inicio';
 import { Changelog } from './pages/Changelog';
 import { OperatorModal } from './components/OperatorModal';
 
-function App() {
+function AppContent() {
   const [paginaAtual, setPaginaAtual] = useState('os_geral');
+  const { isDarkMode } = useTheme();
   
   // Controle de recolhimento da barra lateral
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -68,8 +71,10 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 font-sans flex">
-      {/* Barra Lateral com suporte a recolher e identificação de operador */}
+    <div className={`min-h-screen font-sans flex transition-colors duration-250 ${
+      isDarkMode ? 'bg-[#151921] text-slate-200' : 'bg-slate-100 text-slate-800'
+    }`}>
+      {/* Barra Lateral com suporte a recolher, controle de tema e identificação de operador */}
       <NavBar
         active={paginaAtual}
         setActive={setPaginaAtual}
@@ -97,6 +102,14 @@ function App() {
         onSaveName={handleSaveOperatorName}
       />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }
 

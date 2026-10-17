@@ -16,6 +16,7 @@ import {
   Search,
   Sparkles
 } from 'lucide-react';
+import { ThemeSwitch } from './ThemeSwitch';
 
 // Seções organizadas do menu lateral
 const menuSections = [
@@ -140,7 +141,7 @@ export function NavBar({
                   SERVICE
                 </span>
                 <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 bg-red-600/25 text-red-400 rounded border border-red-500/30">
-                  v1.5
+                  v1.6
                 </span>
               </div>
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-0.5">
@@ -244,14 +245,17 @@ export function NavBar({
         ))}
       </div>
 
-      {/* SEÇÃO SEPARADA AO FINAL: CHANGELOG DISCRETO & OPERADOR */}
+      {/* SEÇÃO SEPARADA AO FINAL: TEMA, CHANGELOG DISCRETO & OPERADOR */}
       <div className="p-3 border-t border-slate-800/80 bg-slate-900/95 space-y-2.5 shrink-0">
+        {/* Controle de Modo Escuro Suave (Estilo Switch) */}
+        <ThemeSwitch isCollapsed={isCollapsed} />
+
         {/* Botão de Changelog Separado e Mais Discreto */}
         <div>
           <button
             type="button"
             onClick={() => setActive('changelog')}
-            title={isCollapsed ? 'Changelog v1.5' : undefined}
+            title={isCollapsed ? 'Changelog v1.6' : undefined}
             className={`w-full flex items-center transition-all duration-150 rounded-xl cursor-pointer group relative ${
               isCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2'
             } ${
@@ -277,7 +281,7 @@ export function NavBar({
             {!isCollapsed && (
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-bold text-slate-400 bg-slate-800/90 px-1.5 py-0.5 rounded border border-slate-700/60">
-                  v1.5
+                  v1.6
                 </span>
                 <Sparkles size={11} className="text-amber-400/80" />
               </div>
@@ -288,7 +292,7 @@ export function NavBar({
               <div className="absolute left-full ml-3 px-2.5 py-1 bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-slate-700">
                 <span>Changelog & Novidades</span>
                 <span className="ml-1.5 text-[9px] bg-slate-700 text-slate-300 px-1 py-0.5 rounded font-bold">
-                  v1.5
+                  v1.6
                 </span>
               </div>
             )}

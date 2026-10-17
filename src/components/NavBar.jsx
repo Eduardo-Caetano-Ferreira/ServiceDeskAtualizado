@@ -14,7 +14,9 @@ import {
   Radio,
   Edit3,
   Search,
-  Sparkles
+  Sparkles,
+  FileCheck2,
+  MessagesSquare
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeSwitch';
 
@@ -41,8 +43,10 @@ const menuSections = [
   },
   {
     id: 'comunicacao',
-    title: 'Comunicação',
+    title: 'Comunicação & Encerramento',
     items: [
+      { id: 'encerramento', name: 'Encerramento de Atendimento', icon: FileCheck2, badge: 'Novo' },
+      { id: 'scripts_chat', name: 'Scripts de Chat', icon: MessagesSquare, badge: 'Novo' },
       { id: 'feedback', name: 'Feedback', icon: MessageSquare },
     ]
   }
@@ -141,7 +145,7 @@ export function NavBar({
                   SERVICE
                 </span>
                 <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 bg-red-600/25 text-red-400 rounded border border-red-500/30">
-                  v1.6
+                  v1.7
                 </span>
               </div>
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-0.5">
@@ -255,7 +259,7 @@ export function NavBar({
           <button
             type="button"
             onClick={() => setActive('changelog')}
-            title={isCollapsed ? 'Changelog v1.6' : undefined}
+            title={isCollapsed ? 'Changelog v1.7' : undefined}
             className={`w-full flex items-center transition-all duration-150 rounded-xl cursor-pointer group relative ${
               isCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2'
             } ${
@@ -281,7 +285,7 @@ export function NavBar({
             {!isCollapsed && (
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-bold text-slate-400 bg-slate-800/90 px-1.5 py-0.5 rounded border border-slate-700/60">
-                  v1.6
+                  v1.7
                 </span>
                 <Sparkles size={11} className="text-amber-400/80" />
               </div>
@@ -292,7 +296,7 @@ export function NavBar({
               <div className="absolute left-full ml-3 px-2.5 py-1 bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-slate-700">
                 <span>Changelog & Novidades</span>
                 <span className="ml-1.5 text-[9px] bg-slate-700 text-slate-300 px-1 py-0.5 rounded font-bold">
-                  v1.6
+                  v1.7
                 </span>
               </div>
             )}

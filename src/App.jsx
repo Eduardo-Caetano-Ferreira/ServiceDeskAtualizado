@@ -11,6 +11,8 @@ import { ReparoTV } from './pages/ReparoTV';
 import { ConsultaCeps } from './pages/ConsultaCeps';
 import { Inicio } from './pages/Inicio';
 import { Changelog } from './pages/Changelog';
+import { EncerramentoAtendimento } from './pages/EncerramentoAtendimento';
+import { ScriptsChat } from './pages/ScriptsChat';
 import { OperatorModal } from './components/OperatorModal';
 
 function AppContent() {
@@ -63,6 +65,10 @@ function AppContent() {
         return <ReparoTV />;
       case 'feedback':
         return <Feedback />;
+      case 'encerramento':
+        return <EncerramentoAtendimento />;
+      case 'scripts_chat':
+        return <ScriptsChat />;
       case 'changelog':
         return <Changelog />;
       default:

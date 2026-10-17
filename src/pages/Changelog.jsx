@@ -9,9 +9,42 @@ import {
 
 const changelogData = [
   {
-    version: '1.6',
+    version: '1.7',
     releaseDate: '17 de Outubro de 2026',
     isLatest: true,
+    highlight: 'Adição da Central de Encerramento de Atendimento (Baixa N2, Adiantamento de Vaga e Confirmação de OS) e Biblioteca Completa de Scripts Prontos de Chat.',
+    changes: [
+      {
+        type: 'novo',
+        title: 'Máscara de Encerramento e Baixa N2',
+        description: 'Módulo completo para geração do resumo de encerramento de chamado técnico N2, incluindo relato inicial, verificações de sinal óptico e status, orientações ao assinante, procedimentos remotos aplicados (reboot, canal Wi-Fi, largura de banda e DNS) e desfecho padronizado para CRM.'
+      },
+      {
+        type: 'novo',
+        title: 'Solicitação de Adiantamento de Vaga',
+        description: 'Formulário integrado para pedidos de encaixe e priorização de visitas técnicas com formatação padronizada para o setor de logística de campo.'
+      },
+      {
+        type: 'novo',
+        title: 'Confirmação e Retorno de Agendamento (OS)',
+        description: 'Geração simultânea em dois formatos essenciais: Formato Logística / WhatsApp e Formato Atendimento / Histórico CRM, com máscara telefônica inteligente e operador vinculado automaticamente.'
+      },
+      {
+        type: 'novo',
+        title: 'Biblioteca de Scripts Prontos de Chat',
+        description: 'Painel com 16 scripts padronizados pré-carregados (Sem Acesso, Lentidão, Mudança de Cômodo, Mudança de Endereço, Ponto Adicional e Atendimento Geral), busca instantânea, edição direta nos cards, adição de scripts customizados e cópia em 1 clique.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Harmonização Visual e Modo Escuro Suave',
+        description: 'Todas as novas ferramentas contam com conformidade visual completa ao design system atual do projeto e suporte nativo ao Modo Escuro Suave.'
+      }
+    ]
+  },
+  {
+    version: '1.6',
+    releaseDate: '17 de Outubro de 2026',
+    isLatest: false,
     highlight: 'Modo Escuro Suave para maior conforto visual e redução do cansaço visual em jornadas diárias, com botão de alternância estilo Switch.',
     changes: [
       {
@@ -280,7 +313,7 @@ export function Changelog() {
                   Histórico de Versões
                 </h1>
                 <span className="bg-red-600 text-white font-extrabold text-xs px-2.5 py-0.5 rounded-full shadow-xs">
-                  v1.6
+                  v1.7
                 </span>
               </div>
               <p className="text-slate-500 text-xs sm:text-sm mt-1">
@@ -293,7 +326,7 @@ export function Changelog() {
         <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 shrink-0">
           <div className="text-right px-2">
             <span className="block text-[10px] uppercase font-bold text-slate-400">Versão Atual</span>
-            <span className="text-sm font-extrabold text-slate-800">1.6 Produção</span>
+            <span className="text-sm font-extrabold text-slate-800">1.7 Produção</span>
           </div>
           <div className="w-9 h-9 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-black shadow-xs">
             <Zap className="w-5 h-5" />

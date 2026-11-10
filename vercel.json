@@ -3,6 +3,9 @@
   "functions": {
     "api/extract-technicians.ts": {
       "maxDuration": 60
+    },
+    "api/test-gemini.ts": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
@@ -11,7 +14,11 @@
       "destination": "/api/extract-technicians"
     },
     {
-      "source": "/(.*)",
+      "source": "/api/test-gemini",
+      "destination": "/api/test-gemini"
+    },
+    {
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]

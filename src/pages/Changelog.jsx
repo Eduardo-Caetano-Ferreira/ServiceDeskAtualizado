@@ -9,9 +9,47 @@ import {
 
 const changelogData = [
   {
+    version: '1.8',
+    releaseDate: '10 de Novembro de 2026',
+    isLatest: true,
+    highlight: 'Alta disponibilidade da leitura de escala com IA: failover em cadeia (modelos e chaves), retry com backoff e revisão do resultado antes de publicar.',
+    changes: [
+      {
+        type: 'novo',
+        title: 'Failover em cadeia na IA',
+        description: 'Cada falha é classificada (imagem inválida, chave rejeitada, modelo inexistente, cota, sobrecarga) e recebe a ação certa: abortar, trocar de chave, pular o modelo ou repetir com backoff. Timeout por tentativa, orçamento total de tempo e circuit breaker para modelos instáveis. Suporte a uma segunda chave (GEMINI_API_KEY_2) e à lista de modelos por variável GEMINI_MODELS.'
+      },
+      {
+        type: 'novo',
+        title: 'Revisão antes de publicar e botão Desfazer',
+        description: 'A escala extraída pela IA agora aparece para conferência e só é gravada após confirmação. A escala anterior fica salva como backup e pode ser restaurada com um clique.'
+      },
+      {
+        type: 'novo',
+        title: 'Diagnóstico das tentativas',
+        description: 'O painel de comunicação com a IA lista cada modelo tentado, o resultado e o tempo gasto.'
+      },
+      {
+        type: 'correcao',
+        title: 'Escala não é mais sobrescrita por resultado vazio',
+        description: 'Resposta inválida ou sem nenhum técnico agora conta como falha e passa para o próximo modelo, em vez de gravar listas vazias.'
+      },
+      {
+        type: 'correcao',
+        title: 'Teste de comunicação em produção',
+        description: 'O endpoint de teste da IA passou a existir também na Vercel e usa a mesma cadeia de failover da extração. O selo "API Online" deixou de aparecer sem teste real.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Mensagens de erro específicas',
+        description: 'Indisponibilidade da IA, chave inválida, imagem inválida e imagem sem técnicos agora mostram mensagens distintas.'
+      }
+    ]
+  },
+  {
     version: '1.7',
     releaseDate: '17 de Outubro de 2026',
-    isLatest: true,
+    isLatest: false,
     highlight: 'Adição da Central de Encerramento de Atendimento (Baixa N2, Adiantamento de Vaga e Confirmação de OS) e Biblioteca Completa de Scripts Prontos de Chat.',
     changes: [
       {

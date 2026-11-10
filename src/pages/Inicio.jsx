@@ -20,6 +20,7 @@ import {
   Zap
 } from 'lucide-react';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { Undo2, CheckCircle2, XCircle } from 'lucide-react';
 import { db } from '../lib/firebase';
 
 export function Inicio() {
@@ -45,8 +46,15 @@ export function Inicio() {
     return null;
   });
 
+  // Resultado extraído aguardando confirmação do operador (não grava até confirmar)
+  const [pending, setPending] = useState(null);
+  const [isPublishing, setIsPublishing] = useState(false);
+  // Última escala válida (backup para "Desfazer")
+  const [previous, setPrevious] = useState(null);
+  const [lastAttempts, setLastAttempts] = useState([]);
+
   // Firestore state for technicians and last sync
-  const [data, setData] = useState({ 
+  const [data, setData] = useState({
     moto: [], 
     car: [], 
     updatedAt: null,
@@ -65,14 +73,41 @@ export function Inicio() {
           car: Array.isArray(docData.car) ? docData.car : [],
           updatedAt: docData.updatedAt || null,
           geminiLastSync: docData.geminiLastSync || docData.updatedAt || null,
-          geminiStatus: docData.geminiStatus || 'online',
+          // Sem valor padrão "online": só mostra online se houve sincronização/teste real
+          geminiStatus: docData.geminiStatus || null,
           geminiModel: docData.geminiModel || null,
           geminiLatencyMs: docData.geminiLatencyMs || null
         });
       }
     });
-    return () => unsub();
+    const unsubPrev = onSnapshot(doc(db, "techniciansList", "previous"), (docSnap) => {
+      if (docSnap.exists()) {
+        const d = docSnap.data();
+        setPrevious({
+          moto: Array.isArray(d.moto) ? d.moto : [],
+          car: Array.isArray(d.car) ? d.car : [],
+          updatedAt: d.updatedAt || null
+        });
+      } else {
+        setPrevious(null);
+      }
+    });
+    return () => {
+      unsub();
+      unsubPrev();
+    };
   }, []);
+
+  // Mensagem amigável por tipo de falha vinda do failover do servidor
+  const friendlyError = (parsed, status) => {
+    const kind = parsed?.kind;
+    if (kind === 'abort') return parsed.details || "A imagem não pôde ser processada. Tente outra captura.";
+    if (kind === 'empty') return parsed.details;
+    if (kind === 'no-key') return "A IA não está configurada no servidor (chave ausente). Avise o administrador.";
+    if (kind === 'exhausted' && status === 502) return "A chave da API foi rejeitada. Avise o administrador.";
+    if (kind === 'exhausted') return "A IA está indisponível no momento (todos os modelos falharam). Tente novamente em instantes.";
+    return parsed?.details || parsed?.error || `Erro ${status}: falha ao processar a imagem`;
+  };
 
   const formatDateTime = (isoString) => {
     if (!isoString) return 'Nunca sincronizado';
@@ -217,7 +252,13 @@ export function Inicio() {
     setError(null);
     try {
       const response = await fetch('/api/test-gemini');
-      const result = await response.json();
+      let result;
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error("O servidor não respondeu em formato válido (endpoint de teste indisponível).");
+      }
+      setLastAttempts(Array.isArray(result.attempts) ? result.attempts : []);
 
       if (response.ok && result.success) {
         const testPayload = {
@@ -239,7 +280,7 @@ export function Inicio() {
           geminiLatencyMs: testPayload.latencyMs
         }, { merge: true });
       } else {
-        throw new Error(result.details || result.error || "A API não respondeu com sucesso.");
+        throw new Error(friendlyError(result, response.status));
       }
     } catch (err) {
       console.error("Erro no teste da API Gemini:", err);
@@ -272,13 +313,12 @@ export function Inicio() {
       let extractedData = null;
       let lastErrorMessage = "";
 
-      for (let attempt = 1; attempt <= 2; attempt++) {
+      // O servidor já faz o failover entre modelos/chaves; aqui só repetimos em falha de rede.
+      for (let attempt = 1; attempt <= 2 && !extractedData; attempt++) {
         try {
           const response = await fetch('/api/extract-technicians', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               image: base64Data,
               mimeType: fileToUpload.type || 'image/jpeg',
@@ -290,30 +330,19 @@ export function Inicio() {
           try {
             parsed = JSON.parse(responseText);
           } catch {
-            parsed = { error: responseText.slice(0, 200) };
+            parsed = { details: response.status === 413 ? "Imagem muito grande. Tente um print menor." : responseText.slice(0, 200) };
           }
 
           if (response.ok && (parsed.moto || parsed.car)) {
             extractedData = parsed;
-            break;
+          } else {
+            lastErrorMessage = friendlyError(parsed, response.status);
+            setLastAttempts(Array.isArray(parsed.attempts) ? parsed.attempts : []);
+            break; // erro vindo do servidor: o failover já foi esgotado
           }
-
-          if (response.status === 503 && attempt < 2) {
-            await new Promise((r) => setTimeout(r, 1500));
-            continue;
-          }
-
-          let msg = parsed?.details || parsed?.error || `Erro ${response.status}: Falha ao processar a imagem`;
-          if (typeof msg === 'string' && (msg.includes("503") || msg.includes("high demand") || msg.includes("UNAVAILABLE"))) {
-            msg = "Os servidores de inteligência artificial estão com alta demanda momentânea. Por favor, tente novamente em instantes.";
-          }
-          lastErrorMessage = msg;
         } catch (fetchErr) {
-          if (attempt < 2) {
-            await new Promise((r) => setTimeout(r, 1500));
-            continue;
-          }
           lastErrorMessage = fetchErr?.message || "Erro de conexão ao enviar a imagem.";
+          if (attempt < 2) await new Promise((r) => setTimeout(r, 1500));
         }
       }
 
@@ -321,44 +350,93 @@ export function Inicio() {
         throw new Error(lastErrorMessage || "Não foi possível extrair os técnicos da imagem. Tente novamente.");
       }
 
-      const sanitizedData = {
+      setLastAttempts(Array.isArray(extractedData.attempts) ? extractedData.attempts : []);
+
+      // Não grava ainda: o operador revisa e confirma antes de publicar
+      setPending({
         moto: Array.isArray(extractedData.moto) ? extractedData.moto : [],
-        car: Array.isArray(extractedData.car) ? extractedData.car : []
-      };
-
-      const nowIso = new Date().toISOString();
-
-      // Save extracted data and sync time to Firestore
-      const modelUsed = extractedData.modelUsed || 'gemini-3.1-flash-lite';
-      const latencyMs = extractedData.latencyMs || null;
-
-      await setDoc(doc(db, "techniciansList", "current"), {
-        ...sanitizedData,
-        updatedAt: nowIso,
-        geminiLastSync: nowIso,
-        geminiStatus: 'online',
-        geminiModel: modelUsed,
-        geminiLatencyMs: latencyMs
-      }, { merge: true });
-
-      // Update local storage
-      const syncObj = {
-        success: true,
-        status: 'online',
-        model: modelUsed,
-        latencyMs: latencyMs,
-        timestamp: nowIso
-      };
-      setGeminiTestResult(syncObj);
-      localStorage.setItem('gemini_last_test_result', JSON.stringify(syncObj));
-
-      setSelectedFile(null);
-      setPreviewUrl(null);
+        car: Array.isArray(extractedData.car) ? extractedData.car : [],
+        modelUsed: extractedData.modelUsed || null,
+        latencyMs: extractedData.latencyMs || null
+      });
     } catch (err) {
       console.error(err);
       setError(err.message || "Erro ao conectar com o servidor para processar a imagem.");
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  // Publica a escala revisada, guardando a anterior como backup
+  const handleConfirmPublish = async () => {
+    if (!pending) return;
+    setIsPublishing(true);
+    setError(null);
+    try {
+      const nowIso = new Date().toISOString();
+
+      if (data.moto.length + data.car.length > 0) {
+        await setDoc(doc(db, "techniciansList", "previous"), {
+          moto: data.moto,
+          car: data.car,
+          updatedAt: data.updatedAt || null,
+          backedUpAt: nowIso
+        });
+      }
+
+      await setDoc(doc(db, "techniciansList", "current"), {
+        moto: pending.moto,
+        car: pending.car,
+        updatedAt: nowIso,
+        geminiLastSync: nowIso,
+        geminiStatus: 'online',
+        geminiModel: pending.modelUsed,
+        geminiLatencyMs: pending.latencyMs
+      }, { merge: true });
+
+      const syncObj = {
+        success: true,
+        status: 'online',
+        model: pending.modelUsed,
+        latencyMs: pending.latencyMs,
+        timestamp: nowIso
+      };
+      setGeminiTestResult(syncObj);
+      localStorage.setItem('gemini_last_test_result', JSON.stringify(syncObj));
+
+      setPending(null);
+      setSelectedFile(null);
+      setPreviewUrl(null);
+    } catch (err) {
+      console.error(err);
+      setError("Não foi possível salvar a escala: " + (err.message || "erro desconhecido"));
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  const handleDiscardPending = () => setPending(null);
+
+  // Restaura a escala anterior (backup salvo na última publicação)
+  const handleUndo = async () => {
+    if (!previous) return;
+    try {
+      const nowIso = new Date().toISOString();
+      // Troca: a escala atual vira o novo backup, permitindo desfazer o desfazer
+      await setDoc(doc(db, "techniciansList", "previous"), {
+        moto: data.moto,
+        car: data.car,
+        updatedAt: data.updatedAt || null,
+        backedUpAt: nowIso
+      });
+      await setDoc(doc(db, "techniciansList", "current"), {
+        moto: previous.moto,
+        car: previous.car,
+        updatedAt: previous.updatedAt || nowIso
+      }, { merge: true });
+    } catch (err) {
+      console.error(err);
+      setError("Não foi possível restaurar a escala anterior.");
     }
   };
 
@@ -503,6 +581,69 @@ export function Inicio() {
             )}
           </button>
 
+          {/* REVISÃO DO RESULTADO ANTES DE PUBLICAR */}
+          {pending && (
+            <motion.div
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-2xl border border-amber-300 bg-amber-50/70 p-4 space-y-3"
+            >
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                <div className="text-[11px] text-slate-700 leading-relaxed">
+                  <p className="font-extrabold text-slate-800 text-xs">Revise antes de publicar</p>
+                  A IA encontrou <strong>{pending.moto.length} de moto</strong> e <strong>{pending.car.length} de carro</strong>
+                  {pending.modelUsed ? <> (modelo <span className="font-mono">{pending.modelUsed}</span>)</> : null}.
+                  {totalCount > 0 && (
+                    <> A escala atual ({data.moto.length} moto / {data.car.length} carro) será substituída, com backup para desfazer.</>
+                  )}
+                </div>
+              </div>
+              <div className="max-h-32 overflow-y-auto rounded-lg border border-amber-200 bg-white text-[11px] divide-y divide-slate-100">
+                {[...pending.moto.map(t => ({ ...t, tipo: 'MOTO' })), ...pending.car.map(t => ({ ...t, tipo: 'CARRO' }))].map((t, i) => (
+                  <div key={i} className="px-2.5 py-1.5 flex items-center gap-2">
+                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${t.tipo === 'MOTO' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>{t.tipo}</span>
+                    <span className="font-bold text-slate-800 truncate">{t.name}</span>
+                    <span className="text-slate-500 truncate">{[t.region, t.city].filter(Boolean).join(' • ')}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleConfirmPublish}
+                  disabled={isPublishing}
+                  className="flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-60 flex items-center justify-center gap-1.5"
+                >
+                  {isPublishing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  Confirmar e publicar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDiscardPending}
+                  disabled={isPublishing}
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 flex items-center gap-1.5"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  Descartar
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* DESFAZER: restaura a escala anterior */}
+          {previous && !pending && (
+            <button
+              type="button"
+              onClick={handleUndo}
+              className="w-full py-2 px-3 rounded-xl text-[11px] font-bold border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 flex items-center justify-center gap-2"
+              title="Volta para a escala publicada antes da atual"
+            >
+              <Undo2 className="w-3.5 h-3.5 text-slate-500" />
+              Desfazer (voltar à escala anterior: {previous.moto.length} moto / {previous.car.length} carro)
+            </button>
+          )}
+
           {/* WIDGET DE STATUS & TESTE DA API GEMINI */}
           <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
             <div className="flex items-center justify-between">
@@ -555,6 +696,23 @@ export function Inicio() {
                 </div>
               )}
             </div>
+
+            {/* Tentativas do failover (última leitura/teste) */}
+            {lastAttempts.length > 0 && (
+              <div className="border-t border-slate-200/80 pt-2 space-y-1">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Tentativas do failover</span>
+                {lastAttempts.map((a, i) => (
+                  <div key={i} className="flex items-center justify-between text-[10px] gap-2">
+                    <span className="font-mono text-slate-700 truncate">
+                      {a.model}{a.keyIdx > 0 ? ` (chave ${a.keyIdx + 1})` : ''}
+                    </span>
+                    <span className={`font-bold shrink-0 ${a.ok ? 'text-emerald-700' : 'text-red-600'}`} title={a.error || ''}>
+                      {a.ok ? `ok • ${a.ms}ms` : `${a.kind || 'erro'}${a.status ? ' ' + a.status : ''}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* BOTÃO PARA TESTAR COMUNICAÇÃO GEMINI */}
             <button

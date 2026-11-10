@@ -428,32 +428,7 @@ ${scriptExcecao}`.trim();
           </h2>
           <div className="space-y-4 flex-grow">
             <div>
-              <div className="flex justify-between items-center mb-1.5">
-                <label className={labelClass}>Data de Agendamento *</label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setTodayDate('dataAgendamento')}
-                    className="text-xs text-primary font-semibold hover:underline cursor-pointer"
-                  >
-                    Hoje
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDateOffset('dataAgendamento', 1)}
-                    className="text-xs text-primary font-semibold hover:underline cursor-pointer"
-                  >
-                    Amanhã
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDateOffset('dataAgendamento', 2)}
-                    className="text-xs text-primary font-semibold hover:underline cursor-pointer"
-                  >
-                    +2 dias
-                  </button>
-                </div>
-              </div>
+              <label className={labelClass}>Data de Agendamento *</label>
               <DateInputWithCalendar 
                 name="dataAgendamento" 
                 value={formData.dataAgendamento} 
@@ -461,6 +436,22 @@ ${scriptExcecao}`.trim();
                 placeholder="DD/MM/AAAA" 
                 className={getInputClass('dataAgendamento')} 
               />
+              <div className="flex items-center gap-1.5 mt-2">
+                {[
+                  { label: 'Hoje', onClick: () => setTodayDate('dataAgendamento') },
+                  { label: 'Amanhã', onClick: () => setDateOffset('dataAgendamento', 1) },
+                  { label: '+2 dias', onClick: () => setDateOffset('dataAgendamento', 2) },
+                ].map((chip) => (
+                  <button
+                    key={chip.label}
+                    type="button"
+                    onClick={chip.onClick}
+                    className="text-xs font-semibold px-3 py-1 rounded-full bg-[color:var(--accent-soft)] text-[color:var(--accent)] hover:brightness-95 active:scale-95 transition cursor-pointer"
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div>

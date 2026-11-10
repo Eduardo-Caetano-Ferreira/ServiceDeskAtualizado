@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { ThemeProvider } from './context/ThemeContext';
-import { useTheme } from './context/themeCore';
 import { NavBar } from './components/NavBar';
+import { PageHeader } from './components/PageHeader';
+import { Home } from './pages/Home';
 import { OsGeral } from './pages/OsGeral';
 import { MudEndereco } from './pages/MudEndereco';
 import { MudComodo } from './pages/MudComodo';
@@ -9,25 +10,33 @@ import { PontoAdicional } from './pages/PontoAdicional';
 import { Feedback } from './pages/Feedback';
 import { ReparoTV } from './pages/ReparoTV';
 import { ConsultaCeps } from './pages/ConsultaCeps';
-import { Inicio } from './pages/Inicio';
+import { AtualizarRota } from './pages/AtualizarRota';
 import { Changelog } from './pages/Changelog';
 import { EncerramentoAtendimento } from './pages/EncerramentoAtendimento';
 import { ScriptsChat } from './pages/ScriptsChat';
 import { OperatorModal } from './components/OperatorModal';
-
-// Ordem do menu lateral: Alt+1..9 e Alt+0 (10º item)
-const NAV_SHORTCUT_ORDER = [
-  'index', 'consulta_ceps', 'os_geral', 'mud_endereco', 'mud_comodo',
-  'ponto_adicional', 'reparo_tv', 'encerramento', 'scripts_chat', 'feedback'
-];
+import { SHORTCUT_BY_CODE } from './lib/navConfig';
 
 // Telas cujo primeiro campo é busca/filtro: não recebem foco automático
-const NO_AUTOFOCUS_PAGES = ['index', 'consulta_ceps', 'scripts_chat', 'changelog'];
+const NO_AUTOFOCUS_PAGES = ['home', 'consulta_ceps', 'scripts_chat', 'atualizar_rota', 'changelog'];
+
+const PAGES_COMPONENTS = {
+  os_geral: OsGeral,
+  consulta_ceps: ConsultaCeps,
+  mud_endereco: MudEndereco,
+  mud_comodo: MudComodo,
+  ponto_adicional: PontoAdicional,
+  reparo_tv: ReparoTV,
+  feedback: Feedback,
+  encerramento: EncerramentoAtendimento,
+  scripts_chat: ScriptsChat,
+  atualizar_rota: AtualizarRota,
+  changelog: Changelog,
+};
 
 function AppContent() {
-  const [paginaAtual, setPaginaAtual] = useState('os_geral');
-  const { isDarkMode } = useTheme();
-  
+  const [paginaAtual, setPaginaAtual] = useState('home');
+
   // Controle de recolhimento da barra lateral
   const [isCollapsed, setIsCollapsed] = useState(() => {
     return localStorage.getItem('serviceDesk_sidebar_collapsed') === 'true';
@@ -69,10 +78,17 @@ function AppContent() {
         return;
       }
 
-      // Alt+1..9 / Alt+0: trocar de tela
-      if (e.altKey && !mod && !e.shiftKey && /^Digit[0-9]$/.test(e.code)) {
-        const n = Number(e.code.slice(5));
-        const target = NAV_SHORTCUT_ORDER[n === 0 ? 9 : n - 1];
+      // Ctrl+K: vai para a Início e foca a busca de ferramentas
+      if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaginaAtual('home');
+        setTimeout(() => document.querySelector('[data-home-search]')?.focus(), 120);
+        return;
+      }
+
+      // Alt+tecla: trocar de tela (ver SHORTCUT_BY_CODE em lib/navConfig.js)
+      if (e.altKey && !mod && !e.shiftKey) {
+        const target = SHORTCUT_BY_CODE[e.code];
         if (target) {
           e.preventDefault();
           setPaginaAtual(target);
@@ -82,6 +98,11 @@ function AppContent() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  // Sempre abre a tela nova no topo
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [paginaAtual]);
 
   // Foco automático no primeiro campo vazio ao abrir uma tela de preenchimento
   useEffect(() => {
@@ -112,40 +133,12 @@ function AppContent() {
     window.dispatchEvent(new Event('storage'));
   };
 
-  const renderizarPagina = () => {
-    switch (paginaAtual) {
-      case 'index':
-        return <Inicio />;
-      case 'os_geral':
-        return <OsGeral />;
-      case 'consulta_ceps':
-        return <ConsultaCeps />;
-      case 'mud_endereco':
-        return <MudEndereco />;
-      case 'mud_comodo':
-        return <MudComodo />;
-      case 'ponto_adicional':
-        return <PontoAdicional />;
-      case 'reparo_tv':
-        return <ReparoTV />;
-      case 'feedback':
-        return <Feedback />;
-      case 'encerramento':
-        return <EncerramentoAtendimento />;
-      case 'scripts_chat':
-        return <ScriptsChat />;
-      case 'changelog':
-        return <Changelog />;
-      default:
-        return <div className="text-slate-600">Página em construção...</div>;
-    }
-  };
+  const isHome = paginaAtual === 'home';
+  const PageComponent = PAGES_COMPONENTS[paginaAtual];
 
   return (
-    <div className={`min-h-screen font-sans flex transition-colors duration-250 ${
-      isDarkMode ? 'bg-[#151921] text-slate-200' : 'bg-slate-100 text-slate-800'
-    }`}>
-      {/* Barra Lateral com suporte a recolher, controle de tema e identificação de operador */}
+    <div className="app-shell min-h-screen font-sans flex">
+      {/* Barra lateral translúcida com recolher, tema e operador */}
       <NavBar
         active={paginaAtual}
         setActive={setPaginaAtual}
@@ -155,12 +148,20 @@ function AppContent() {
         onEditOperator={() => setIsOperatorModalOpen(true)}
       />
 
-      {/* Conteúdo Principal com margem adaptativa de acordo com a barra lateral */}
-      <main className={`flex-1 p-4 sm:p-6 md:p-8 transition-all duration-300 w-full flex justify-center ${
+      {/* Conteúdo principal com margem adaptativa de acordo com a barra lateral */}
+      <main className={`flex-1 min-w-0 px-4 sm:px-6 md:px-8 pb-10 transition-[margin] duration-300 w-full ${
         isCollapsed ? 'ml-20' : 'ml-64'
       }`}>
-        <div className="w-full">
-          {renderizarPagina()}
+        {!isHome && <PageHeader pageId={paginaAtual} onHome={() => setPaginaAtual('home')} />}
+
+        <div className={isHome ? 'pt-10 sm:pt-14' : 'pt-6'}>
+          {isHome ? (
+            <Home onNavigate={setPaginaAtual} operatorName={operatorName} />
+          ) : PageComponent ? (
+            <PageComponent />
+          ) : (
+            <div className="text-[color:var(--text-2)]">Página em construção...</div>
+          )}
         </div>
       </main>
 

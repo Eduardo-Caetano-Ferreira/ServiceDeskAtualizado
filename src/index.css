@@ -1,20 +1,131 @@
 @import "tailwindcss";
 
+/* Tema escuro controlado pela classe .dark (e não pelo sistema operacional) */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-primary: #d6334f;
-  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'Segoe UI', system-ui, Roboto, sans-serif;
+
+  /* Cantos mais generosos, no estilo dos produtos Apple */
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 2rem;
+
+  /* Sombras suaves em camadas */
+  --shadow-2xs: 0 1px 1px rgb(0 0 0 / 0.03);
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.04);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 14px -4px rgb(0 0 0 / 0.07);
+  --shadow-md: 0 2px 4px rgb(0 0 0 / 0.04), 0 10px 28px -8px rgb(0 0 0 / 0.12);
+  --shadow-lg: 0 4px 8px rgb(0 0 0 / 0.04), 0 18px 40px -12px rgb(0 0 0 / 0.16);
+  --shadow-xl: 0 8px 16px rgb(0 0 0 / 0.05), 0 28px 60px -16px rgb(0 0 0 / 0.22);
+  --shadow-2xl: 0 12px 24px rgb(0 0 0 / 0.06), 0 40px 90px -20px rgb(0 0 0 / 0.30);
 }
 
+/* ========================================================
+   DESIGN TOKENS (claro / escuro suave)
+   ======================================================== */
 :root {
-  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --surface-2: #f5f5f7;
+  --text: #1d1d1f;
+  --text-2: #6e6e73;
+  --text-3: #86868b;
+  --hairline: rgba(0, 0, 0, 0.08);
+  --glass: rgba(255, 255, 255, 0.72);
+  --accent: #d6334f;
+  --accent-soft: rgba(214, 51, 79, 0.10);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -10px rgba(0, 0, 0, 0.10);
+  --card-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.05), 0 22px 44px -14px rgba(0, 0, 0, 0.22);
+
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+html.dark {
+  --bg: #151921;
+  --surface: #1e2430;
+  --surface-2: #242b3a;
+  --text: #f1f5f9;
+  --text-2: #a1acbd;
+  --text-3: #7b8799;
+  --hairline: rgba(255, 255, 255, 0.09);
+  --glass: rgba(24, 29, 40, 0.72);
+  --accent: #f0546d;
+  --accent-soft: rgba(240, 84, 109, 0.16);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.30), 0 8px 24px -10px rgba(0, 0, 0, 0.50);
+  --card-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.35), 0 22px 44px -14px rgba(0, 0, 0, 0.65);
 }
 
 body {
-  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  @apply bg-slate-900 text-slate-200 antialiased;
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  @apply antialiased;
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.015em;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/* Barras de rolagem discretas */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(128, 128, 140, 0.35) transparent;
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 140, 0.35);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 140, 0.55); background-clip: content-box; border: 3px solid transparent; }
+
+/* Casca da aplicação e superfícies translúcidas */
+.app-shell {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  backdrop-filter: saturate(180%) blur(24px);
+}
+
+/* Refinos globais dos formulários existentes */
+main .border-t-4.border-primary {
+  border-top-width: 1px;
+  border-top-color: var(--hairline);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
 /* Transições suaves ao alternar tema */

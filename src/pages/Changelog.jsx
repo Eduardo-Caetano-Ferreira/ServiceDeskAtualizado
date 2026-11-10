@@ -9,9 +9,52 @@ import {
 
 const changelogData = [
   {
-    version: '1.9',
+    version: '2.0',
     releaseDate: '10 de Novembro de 2026',
     isLatest: true,
+    highlight: 'Novo visual inspirado nos produtos Apple e nova tela Início com cartões para acessar cada ferramenta. A atualização da rota saiu da Início e ganhou página própria.',
+    changes: [
+      {
+        type: 'novo',
+        title: 'Nova tela Início com cartões',
+        description: 'Saudação personalizada, busca de ferramentas (Ctrl+K) e cartões organizados por seção: Ordens de Serviço, Comunicação & Encerramento e Ferramentas. Cada cartão mostra ícone, descrição, atalho de teclado e selo de novidade.'
+      },
+      {
+        type: 'novo',
+        title: 'Resumo da escala na Início',
+        description: 'Uma linha informa quantos técnicos estão na escala, o horário da última atualização e o status da rota. Se a escala estiver desatualizada, o aviso leva direto para Atualizar Rota.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Atualizar Rota em página própria',
+        description: 'O envio da imagem da escala e a lista de técnicos deixaram a tela inicial e agora ficam em Ferramentas > Atualizar Rota (atalho Alt+R).'
+      },
+      {
+        type: 'melhoria',
+        title: 'Novo visual em todo o sistema',
+        description: 'Fundo claro suave, cantos mais arredondados, sombras em camadas, fonte do sistema (SF Pro nos dispositivos Apple, Inter nos demais) e foco com realce suave. O Modo Escuro Suave foi mantido com as mesmas cores nos novos componentes.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Barra lateral translúcida e cabeçalho fixo',
+        description: 'Menu lateral com efeito de vidro, item ativo em tom suave e versão exibida automaticamente a partir do projeto. As telas internas ganharam cabeçalho fixo com botão para voltar à Início e dicas de atalho.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Atalhos Alt reorganizados',
+        description: 'Alt+1 Início, 2 OS Geral, 3 Mudança de Endereço, 4 Mudança de Cômodo, 5 Ponto Adicional, 6 Reparo TV, 7 Encerramento, 8 Scripts de Chat, 9 Feedback, 0 Consulta CEPs e R Atualizar Rota. Ctrl+K abre a busca da Início.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Data de agendamento mais limpa',
+        description: 'Na OS Geral, os atalhos Hoje, Amanhã e +2 dias viraram chips abaixo do campo de data.'
+      }
+    ]
+  },
+  {
+    version: '1.9',
+    releaseDate: '10 de Novembro de 2026',
+    isLatest: false,
     highlight: 'Preenchimento mais rápido: atalhos de teclado, foco automático, "Colar e preencher", normalização de campos e revisão editável da escala lida pela IA.',
     changes: [
       {

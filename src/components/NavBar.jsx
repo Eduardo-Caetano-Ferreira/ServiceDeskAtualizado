@@ -1,356 +1,192 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { 
-  Home, 
-  FileText, 
-  MapPin, 
-  Router, 
-  Network, 
-  MessageSquare, 
-  MonitorPlay, 
-  History, 
-  ChevronLeft, 
-  ChevronRight,
-  Radio,
-  Edit3,
-  Search,
-  Sparkles,
-  FileCheck2,
-  MessagesSquare
-} from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Radio, Edit3, Sparkles, History } from 'lucide-react';
 import { ThemeSwitch } from './ThemeSwitch';
+import { PAGES, SECTIONS, APP_VERSION } from '../lib/navConfig';
 
-// Seções organizadas do menu lateral
-const menuSections = [
-  {
-    id: 'principal',
-    title: 'Navegação',
-    items: [
-      { id: 'index', name: 'Início', icon: Home },
-      { id: 'consulta_ceps', name: 'Consulta CEPs', icon: Search, badge: 'Novo' },
-    ]
-  },
-  {
-    id: 'ordens_servico',
-    title: 'Ordens de Serviço',
-    items: [
-      { id: 'os_geral', name: 'OS Geral', icon: FileText },
-      { id: 'mud_endereco', name: 'Mudança de Endereço', icon: MapPin },
-      { id: 'mud_comodo', name: 'Mudança de Cômodo', icon: Router },
-      { id: 'ponto_adicional', name: 'Ponto Adicional', icon: Network },
-      { id: 'reparo_tv', name: 'Reparo TV', icon: MonitorPlay },
-    ]
-  },
-  {
-    id: 'comunicacao',
-    title: 'Comunicação & Encerramento',
-    items: [
-      { id: 'encerramento', name: 'Encerramento de Atendimento', icon: FileCheck2, badge: 'Novo' },
-      { id: 'scripts_chat', name: 'Scripts de Chat', icon: MessagesSquare, badge: 'Novo' },
-      { id: 'feedback', name: 'Feedback', icon: MessageSquare },
-    ]
-  }
-];
+const getInitials = (fullName) => {
+  if (!fullName) return 'OP';
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
 
-export function NavBar({ 
-  active, 
-  setActive, 
-  isCollapsed, 
+export function NavBar({
+  active,
+  setActive,
+  isCollapsed,
   setIsCollapsed,
   operatorName,
-  onEditOperator 
+  onEditOperator
 }) {
   const [logoError, setLogoError] = useState(false);
-
-  // Helper para obter as iniciais do nome do operador
-  const getInitials = (fullName) => {
-    if (!fullName) return 'OP';
-    const parts = fullName.trim().split(/\s+/);
-    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  };
-
   const isChangelogActive = active === 'changelog';
 
+  const tooltip = (children) => (
+    <span className="absolute left-full ml-3 px-2.5 py-1.5 glass text-[color:var(--text)] text-xs font-semibold rounded-lg shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-[color:var(--hairline)]">
+      {children}
+    </span>
+  );
+
   return (
-    <motion.nav
-      layout
-      className={`fixed left-0 top-0 h-screen z-50 flex flex-col bg-slate-900 border-r border-slate-800 text-slate-100 transition-all duration-300 shadow-2xl ${
+    <nav
+      aria-label="Navegação principal"
+      className={`fixed left-0 top-0 h-screen z-40 flex flex-col glass border-r border-[color:var(--hairline)] text-[color:var(--text)] transition-[width] duration-300 ${
         isCollapsed ? 'w-20' : 'w-64'
       }`}
     >
-      {/* CABEÇALHO / ESPAÇO PARA LOGO SERVICE DESK */}
-      <div className={`border-b border-slate-800/80 relative flex items-center shrink-0 transition-all ${
-        isCollapsed ? 'p-3 justify-center' : 'p-4 justify-between'
-      }`}>
-        {isCollapsed ? (
-          /* Versão compacta da Logo */
-          <div 
-            className={`w-12 h-12 flex items-center justify-center cursor-pointer group transition-all ${
-              !logoError
-                ? 'bg-transparent'
-                : 'rounded-xl bg-gradient-to-br from-red-600 to-rose-700 shadow-md border border-red-500/30'
-            }`}
-            title="Service Desk - Início"
-            onClick={() => setActive('index')}
-          >
+      {/* MARCA */}
+      <div className={`shrink-0 flex items-center ${isCollapsed ? 'flex-col gap-3 py-4' : 'justify-between px-4 pt-5 pb-3'}`}>
+        <button
+          type="button"
+          onClick={() => setActive('home')}
+          title="Início"
+          className="flex items-center gap-3 cursor-pointer group min-w-0"
+        >
+          <span className="w-10 h-10 rounded-[0.85rem] bg-gradient-to-br from-[#ff5d73] to-[#c4213f] flex items-center justify-center shrink-0 shadow-md shadow-[#d6334f]/30 group-hover:scale-105 transition-transform">
             {!logoError ? (
-              <img 
-                src="/logo.png" 
-                alt="Service Desk" 
-                className="w-11 h-11 object-contain drop-shadow-sm group-hover:scale-105 transition-transform" 
-                onLoad={(e) => {
-                  if (e.currentTarget.naturalWidth === 0) setLogoError(true);
-                }}
-                onError={() => setLogoError(true)} 
+              <img
+                src="/logo.png"
+                alt="Service Desk"
+                className="w-7 h-7 object-contain"
+                onError={() => setLogoError(true)}
               />
             ) : (
-              <div className="flex flex-col items-center justify-center">
-                <Radio className="w-5 h-5 text-white animate-pulse" />
-                <span className="text-[8px] font-black text-white leading-none mt-0.5">SD</span>
-              </div>
+              <Radio className="w-5 h-5 text-white" />
             )}
-          </div>
-        ) : (
-          /* Versão Expandida com Espaço Dedicado para Logo */
-          <div 
-            className="flex items-center gap-3 cursor-pointer group flex-1 mr-2"
-            onClick={() => setActive('index')}
-          >
-            {/* Contêiner da Logo */}
-            <div className={`w-11 h-11 flex items-center justify-center shrink-0 transition-all ${
-              !logoError
-                ? 'bg-transparent overflow-visible'
-                : 'rounded-xl bg-gradient-to-br from-red-600 to-rose-700 shadow-md border border-red-500/30 overflow-hidden'
-            }`}>
-              {!logoError ? (
-                <img 
-                  src="/logo.png" 
-                  alt="Service Desk" 
-                  className="w-11 h-11 object-contain drop-shadow-sm group-hover:scale-105 transition-transform"
-                  onLoad={(e) => {
-                    if (e.currentTarget.naturalWidth === 0) setLogoError(true);
-                  }}
-                  onError={() => setLogoError(true)} 
-                />
-              ) : (
-                <Radio className="w-6 h-6 text-white" />
-              )}
-            </div>
+          </span>
+          {!isCollapsed && (
+            <span className="flex flex-col items-start leading-tight min-w-0">
+              <span className="font-semibold text-[15px] tracking-tight">Service Desk</span>
+              <span className="text-[11px] text-[color:var(--text-3)] font-medium">Versão {APP_VERSION}</span>
+            </span>
+          )}
+        </button>
 
-            {/* Nome da Marca SERVICE DESK */}
-            <div className="flex flex-col overflow-hidden">
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-base tracking-tight text-white group-hover:text-red-400 transition-colors">
-                  SERVICE
-                </span>
-                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 bg-red-600/25 text-red-400 rounded border border-red-500/30">
-                  v1.7
-                </span>
-              </div>
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-0.5">
-                DESK
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Botão de Recolher / Expandir barra no topo */}
         <button
           type="button"
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className={`p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition border border-transparent hover:border-slate-700 cursor-pointer ${
-            isCollapsed ? 'absolute -right-3.5 top-6 bg-slate-800 border-slate-700 shadow-md text-white rounded-full' : ''
-          }`}
+          aria-label={isCollapsed ? 'Expandir barra lateral' : 'Recolher barra lateral'}
           title={isCollapsed ? 'Expandir barra lateral' : 'Recolher barra lateral'}
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-[color:var(--text-3)] hover:text-[color:var(--text)] hover:bg-[color:var(--hairline)] transition-colors cursor-pointer shrink-0"
         >
-          {isCollapsed ? <ChevronRight size={15} /> : <ChevronLeft size={18} />}
+          {isCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
         </button>
       </div>
 
-      {/* LISTA DE NAVEGAÇÃO ORGANIZADA EM SEÇÕES */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-4">
-        {menuSections.map((section, sectionIndex) => (
-          <div key={section.id} className="space-y-1">
-            {/* Título da Seção (apenas visível quando expandido) */}
-            {!isCollapsed ? (
-              <div className="px-2.5 py-1 flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 select-none">
+      {/* NAVEGAÇÃO */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 space-y-5">
+        {SECTIONS.map((section) => {
+          const items = PAGES.filter((p) => p.section === section.id && !p.hidden);
+          if (items.length === 0) return null;
+          return (
+            <div key={section.id} className="space-y-0.5">
+              {section.id !== 'principal' && !isCollapsed && (
+                <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[color:var(--text-3)] select-none">
                   {section.title}
-                </span>
-              </div>
-            ) : (
-              sectionIndex > 0 && (
-                <div className="w-8 h-px bg-slate-800 mx-auto my-2" />
-              )
-            )}
+                </div>
+              )}
+              {section.id !== 'principal' && isCollapsed && (
+                <div className="w-6 h-px bg-[color:var(--hairline)] mx-auto my-2" />
+              )}
 
-            {/* Itens da Seção */}
-            <ul className="space-y-1">
-              {section.items.map((item) => {
-                const Icon = item.icon;
-                const isActive = active === item.id;
-
-                return (
-                  <li key={item.id} className="w-full">
-                    <button
-                      type="button"
-                      onClick={() => setActive(item.id)}
-                      title={isCollapsed ? item.name : undefined}
-                      className={`flex items-center w-full rounded-xl transition-all duration-150 group relative cursor-pointer ${
-                        isCollapsed ? 'justify-center p-2.5' : 'gap-3 px-3 py-2.5'
-                      } ${
-                        isActive 
-                          ? 'bg-red-600 text-white font-bold shadow-md shadow-red-950/40 border border-red-500' 
-                          : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-transparent'
-                      }`}
-                    >
-                      <Icon 
-                        size={isCollapsed ? 20 : 18} 
-                        className={`shrink-0 transition-transform group-hover:scale-105 ${
-                          isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'
-                        }`} 
-                      />
-
-                      {!isCollapsed && (
-                        <div className="flex items-center justify-between flex-1 truncate">
-                          <span className="text-xs font-semibold truncate text-left tracking-normal">
+              <ul className="space-y-0.5">
+                {items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = active === item.id;
+                  return (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => setActive(item.id)}
+                        aria-current={isActive ? 'page' : undefined}
+                        title={isCollapsed ? undefined : item.shortcut ? `Alt+${item.shortcut}` : undefined}
+                        className={`group relative w-full flex items-center rounded-xl transition-colors cursor-pointer ${
+                          isCollapsed ? 'justify-center h-11' : 'gap-3 px-3 py-2'
+                        } ${
+                          isActive
+                            ? 'bg-[color:var(--accent-soft)] text-[color:var(--accent)] font-semibold'
+                            : 'text-[color:var(--text-2)] hover:bg-[color:var(--hairline)] hover:text-[color:var(--text)]'
+                        }`}
+                      >
+                        <Icon size={isCollapsed ? 20 : 17} className="shrink-0" strokeWidth={isActive ? 2.3 : 2} />
+                        {!isCollapsed && (
+                          <>
+                            <span className="text-[13px] leading-tight text-left flex-1">{item.name}</span>
+                            {item.badge && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[color:var(--accent-soft)] text-[color:var(--accent)]">
+                                {item.badge}
+                              </span>
+                            )}
+                          </>
+                        )}
+                        {isCollapsed && tooltip(
+                          <>
                             {item.name}
-                          </span>
-                          {item.badge && (
-                            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ml-1.5 ${
-                              isActive 
-                                ? 'bg-white text-red-600' 
-                                : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                            }`}>
-                              {item.badge}
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Tooltip flutuante no modo recolhido */}
-                      {isCollapsed && (
-                        <div className="absolute left-full ml-3 px-2.5 py-1 bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-slate-700">
-                          {item.name}
-                          {item.badge && (
-                            <span className="ml-1.5 text-[9px] bg-red-600 px-1 py-0.5 rounded font-bold">
-                              {item.badge}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+                            {item.shortcut && (
+                              <span className="ml-2 text-[10px] text-[color:var(--text-3)] font-medium">Alt+{item.shortcut}</span>
+                            )}
+                          </>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
       </div>
 
-      {/* SEÇÃO SEPARADA AO FINAL: TEMA, CHANGELOG DISCRETO & OPERADOR */}
-      <div className="p-3 border-t border-slate-800/80 bg-slate-900/95 space-y-2.5 shrink-0">
-        {/* Controle de Modo Escuro Suave (Estilo Switch) */}
+      {/* RODAPÉ: TEMA, NOVIDADES E OPERADOR */}
+      <div className="shrink-0 p-3 border-t border-[color:var(--hairline)] space-y-1">
         <ThemeSwitch isCollapsed={isCollapsed} />
 
-        {/* Botão de Changelog Separado e Mais Discreto */}
-        <div>
-          <button
-            type="button"
-            onClick={() => setActive('changelog')}
-            title={isCollapsed ? 'Changelog v1.7' : undefined}
-            className={`w-full flex items-center transition-all duration-150 rounded-xl cursor-pointer group relative ${
-              isCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2'
-            } ${
-              isChangelogActive
-                ? 'bg-slate-800 text-slate-100 border border-slate-700 shadow-sm font-semibold'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
-            }`}
-          >
-            <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-2.5'}`}>
-              <History 
-                size={isCollapsed ? 18 : 15} 
-                className={`shrink-0 transition-transform group-hover:rotate-[-20deg] ${
-                  isChangelogActive ? 'text-red-400' : 'text-slate-500 group-hover:text-slate-300'
-                }`} 
-              />
-              {!isCollapsed && (
-                <span className="text-xs font-medium text-left">
-                  Changelog
-                </span>
-              )}
-            </div>
-
-            {!isCollapsed && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold text-slate-400 bg-slate-800/90 px-1.5 py-0.5 rounded border border-slate-700/60">
-                  v1.7
-                </span>
-                <Sparkles size={11} className="text-amber-400/80" />
-              </div>
-            )}
-
-            {/* Tooltip flutuante para Changelog no modo recolhido */}
-            {isCollapsed && (
-              <div className="absolute left-full ml-3 px-2.5 py-1 bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-slate-700">
-                <span>Changelog & Novidades</span>
-                <span className="ml-1.5 text-[9px] bg-slate-700 text-slate-300 px-1 py-0.5 rounded font-bold">
-                  v1.7
-                </span>
-              </div>
-            )}
-          </button>
-        </div>
-
-        {/* Card do Operador Ativo */}
-        <div 
-          onClick={onEditOperator}
-          title="Clique para alterar seu nome de operador"
-          className={`flex items-center rounded-xl bg-slate-800/60 border border-slate-700/50 p-2 cursor-pointer hover:bg-slate-800 hover:border-red-500/40 transition group relative ${
-            isCollapsed ? 'justify-center' : 'gap-2.5'
+        <button
+          type="button"
+          onClick={() => setActive('changelog')}
+          aria-current={isChangelogActive ? 'page' : undefined}
+          className={`group relative w-full flex items-center rounded-xl transition-colors cursor-pointer ${
+            isCollapsed ? 'justify-center h-11' : 'justify-between px-3 py-2'
+          } ${
+            isChangelogActive
+              ? 'bg-[color:var(--accent-soft)] text-[color:var(--accent)] font-semibold'
+              : 'text-[color:var(--text-2)] hover:bg-[color:var(--hairline)] hover:text-[color:var(--text)]'
           }`}
         >
-          {/* Avatar com iniciais */}
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-600 to-rose-700 text-white font-extrabold text-xs flex items-center justify-center shrink-0 shadow-xs border border-red-400/30 group-hover:scale-105 transition-transform">
-            {getInitials(operatorName)}
-          </div>
-
+          <span className="flex items-center gap-3">
+            <History size={isCollapsed ? 20 : 17} className="shrink-0" />
+            {!isCollapsed && <span className="text-[13px]">Novidades</span>}
+          </span>
           {!isCollapsed && (
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Operador Ativo
-                </span>
-                <Edit3 size={12} className="text-slate-400 group-hover:text-red-400 transition-colors" />
-              </div>
-              <p className="text-xs font-bold text-white truncate group-hover:text-red-300 transition-colors">
-                {operatorName || 'Definir Nome...'}
-              </p>
-            </div>
+            <span className="flex items-center gap-1 text-[11px] text-[color:var(--text-3)] font-medium">
+              v{APP_VERSION}
+              <Sparkles size={11} className="text-amber-500" />
+            </span>
           )}
+          {isCollapsed && tooltip(<>Novidades · v{APP_VERSION}</>)}
+        </button>
 
-          {/* Tooltip flutuante para operador quando recolhido */}
-          {isCollapsed && (
-            <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 border border-slate-700">
-              <p className="text-[10px] text-slate-400 font-bold uppercase">Operador:</p>
-              <p className="font-bold">{operatorName || 'Clique para definir'}</p>
-            </div>
+        <button
+          type="button"
+          onClick={onEditOperator}
+          title="Alterar nome do operador"
+          className={`group relative w-full flex items-center rounded-xl p-2 text-left hover:bg-[color:var(--hairline)] transition-colors cursor-pointer ${
+            isCollapsed ? 'justify-center' : 'gap-3'
+          }`}
+        >
+          <span className="w-9 h-9 rounded-full bg-gradient-to-br from-[#ff5d73] to-[#c4213f] text-white font-semibold text-xs flex items-center justify-center shrink-0 shadow-sm">
+            {getInitials(operatorName)}
+          </span>
+          {!isCollapsed && (
+            <span className="flex-1 min-w-0 leading-tight">
+              <span className="block text-[11px] text-[color:var(--text-3)] font-medium">Operador</span>
+              <span className="block text-[13px] font-semibold truncate">{operatorName || 'Definir nome…'}</span>
+            </span>
           )}
-        </div>
-
-        {/* Botão de Toggle Expandir/Recolher no rodapé */}
-        {!isCollapsed && (
-          <button
-            type="button"
-            onClick={() => setIsCollapsed(true)}
-            className="w-full py-1.5 px-3 rounded-lg text-[11px] font-semibold text-slate-400 hover:text-white hover:bg-slate-800/70 transition flex items-center justify-center gap-1.5 border border-slate-800/80 cursor-pointer"
-          >
-            <ChevronLeft size={14} />
-            <span>Recolher barra lateral</span>
-          </button>
-        )}
+          {!isCollapsed && <Edit3 size={14} className="text-[color:var(--text-3)] group-hover:text-[color:var(--accent)] transition-colors" />}
+          {isCollapsed && tooltip(<>Operador: {operatorName || 'definir nome'}</>)}
+        </button>
       </div>
-    </motion.nav>
+    </nav>
   );
 }

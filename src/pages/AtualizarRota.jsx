@@ -23,7 +23,7 @@ import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { Undo2, CheckCircle2, XCircle } from 'lucide-react';
 import { db } from '../lib/firebase';
 
-export function Inicio() {
+export function AtualizarRota() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);

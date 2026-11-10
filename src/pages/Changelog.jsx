@@ -9,9 +9,37 @@ import {
 
 const changelogData = [
   {
-    version: '2.0',
+    version: '2.1',
     releaseDate: '10 de Novembro de 2026',
     isLatest: true,
+    highlight: 'Campo de Observação em todas as ordens de serviço (destacado no topo do formulário e do script), novo favicon e ajustes visuais.',
+    changes: [
+      {
+        type: 'novo',
+        title: 'Campo Observação nas ordens de serviço',
+        description: 'OS Geral, Mudança de Endereço, Mudança de Cômodo, Ponto Adicional e Reparo TV ganharam um campo opcional de Observação em destaque no topo da tela. Quando preenchido, o texto sai destacado no início do script copiado, antes de todas as demais informações.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Novo favicon',
+        description: 'O ícone da aba do navegador agora é o mesmo da barra de navegação: logo branco sobre fundo vermelho, em quadrado de cantos arredondados. Também foi incluído o ícone para atalhos em dispositivos Apple.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Barra de navegação sem tags "Novo"',
+        description: 'As etiquetas de novidade foram removidas do menu lateral para um visual mais limpo.'
+      },
+      {
+        type: 'correcao',
+        title: 'Painel Técnicos da Região no Modo Escuro',
+        description: 'O fundo das tabelas de técnicos e regiões ficava cinza claro no tema escuro. Agora segue as cores do Modo Escuro Suave, incluindo o destaque ao passar o mouse nas linhas.'
+      }
+    ]
+  },
+  {
+    version: '2.0',
+    releaseDate: '10 de Novembro de 2026',
+    isLatest: false,
     highlight: 'Novo visual inspirado nos produtos Apple e nova tela Início com cartões para acessar cada ferramenta. A atualização da rota saiu da Início e ganhou página própria.',
     changes: [
       {

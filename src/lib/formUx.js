@@ -224,3 +224,15 @@ export function useFocusFirstError(errorFields, showToast) {
     return () => document.removeEventListener('click', onClick);
   }, []);
 }
+
+// ---------- Observação destacada no topo dos scripts de O.S. ----------
+
+/**
+ * Bloco de observação para o INÍCIO do script (vazio se não houver texto).
+ * Em texto puro (sem emojis) para colar em qualquer campo do CRM.
+ */
+export const formatObservation = (text) => {
+  const t = String(text || '').trim();
+  if (!t) return '';
+  return `!!! OBSERVAÇÃO !!!\n${t}\n!!!!!!!!!!!!!!!!!!\n\n`;
+};

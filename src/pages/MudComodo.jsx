@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useDebouncedStorage, useFocusFirstError, normalizeClienteDesde, normalizeTime } from '../lib/formUx';
+import { useDebouncedStorage, useFocusFirstError, normalizeClienteDesde, normalizeTime, formatObservation } from '../lib/formUx';
+import { ObservationCard } from '../components/ObservationCard';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CalendarClock, User, FileText, ShieldCheck, 
@@ -11,6 +12,7 @@ import { ContactSection } from '../components/ContactSection';
 import { createDefaultContact, normalizeContacts, formatContactsForScript } from '../lib/phoneUtils';
 
 const initialState = {
+  observacao: '',
   dataAgendamento: '',
   periodo: '',
   horarioApos: '',
@@ -284,7 +286,7 @@ export function MudComodo() {
     const operadorFinal = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador') || '';
     const contatosFmt = formatContactsForScript(formData.contatos) || formData.contato;
 
-    const finalScript = `=== O.S MUDANÇA DE CÔMODO ===
+    const finalScript = `${formatObservation(formData.observacao)}=== O.S MUDANÇA DE CÔMODO ===
 Data: ${dataAgend}
 Período: ${periodoFmt}
 
@@ -346,6 +348,9 @@ Atendente: ${operadorFinal}`.trim();
     >
       {/* TÉCNICOS DA REGIÃO (ROTA DIÁRIA) */}
       <TechniciansRegion />
+
+      {/* OBSERVAÇÃO: destacada no topo e também no início do script */}
+      <ObservationCard value={formData.observacao} onChange={handleChange} />
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         

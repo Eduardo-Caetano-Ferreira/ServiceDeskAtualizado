@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   useDebouncedStorage, useFocusFirstError, formatDateOffset,
-  normalizeClienteDesde, normalizeTime, parseQuickPaste
-} from '../lib/formUx';
+  normalizeClienteDesde, normalizeTime, parseQuickPaste, formatObservation } from '../lib/formUx';
+import { ObservationCard } from '../components/ObservationCard';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Calendar, User, FileText, Cpu, Clock, Headset,
@@ -15,6 +15,7 @@ import { HardwareSegment } from '../components/HardwareSegment';
 import { createDefaultContact, normalizeContacts, formatContactsForScript, formatPhone } from '../lib/phoneUtils';
 
 const initialState = {
+  observacao: '',
   dataAgendamento: '',
   periodo: '',
   horarioApos: '',
@@ -296,7 +297,7 @@ export function OsGeral() {
     const atendenteAtual = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador') || '';
     const contatosFmt = formatContactsForScript(formData.contatos) || formData.contato;
 
-    const finalScript = `=== AGENDAMENTO ===
+    const finalScript = `${formatObservation(formData.observacao)}=== AGENDAMENTO ===
 DATA: ${dataAgend}
 PERÍODO: ${periodoFmt}
 
@@ -377,6 +378,9 @@ ${scriptExcecao}`.trim();
     >
       {/* TÉCNICOS DA REGIÃO (ROTA DIÁRIA COM PESQUISA POR CIDADE/BAIRRO) */}
       <TechniciansRegion />
+
+      {/* OBSERVAÇÃO: destacada no topo e também no início do script */}
+      <ObservationCard value={formData.observacao} onChange={handleChange} />
 
       {/* COLAR E PREENCHER: extrai campos de um texto copiado do CRM/chat */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs">

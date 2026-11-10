@@ -112,11 +112,6 @@ export function NavBar({
                         {!isCollapsed && (
                           <>
                             <span className="text-[13px] leading-tight text-left flex-1">{item.name}</span>
-                            {item.badge && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[color:var(--accent-soft)] text-[color:var(--accent)]">
-                                {item.badge}
-                              </span>
-                            )}
                           </>
                         )}
                         {isCollapsed && tooltip(

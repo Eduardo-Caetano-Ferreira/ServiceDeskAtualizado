@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useDebouncedStorage, useFocusFirstError, normalizeClienteDesde, normalizeTime, formatObservation } from '../lib/formUx';
-import { ObservationCard } from '../components/ObservationCard';
+import { ObservationField } from '../components/ObservationField';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CalendarDays, MapPin, FileCheck, PackageCheck, 
@@ -290,8 +290,6 @@ Atendente: ${operadorFinal}`.trim();
       {/* TÉCNICOS DA REGIÃO (ROTA DIÁRIA) */}
       <TechniciansRegion />
 
-      {/* OBSERVAÇÃO: destacada no topo e também no início do script */}
-      <ObservationCard value={formData.observacao} onChange={handleChange} />
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         
@@ -301,6 +299,7 @@ Atendente: ${operadorFinal}`.trim();
             <CalendarDays size={18} className="text-primary" /> 
             Agendamento & Detalhes
           </h2>
+          <ObservationField value={formData.observacao} onChange={handleChange} />
           
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 items-start">
             

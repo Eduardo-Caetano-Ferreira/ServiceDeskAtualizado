@@ -6,8 +6,8 @@ import pkg from '../../package.json';
 
 // Fonte única da navegação: usada pela barra lateral, pela Home, pelo cabeçalho e pelos atalhos.
 
-// "1.9.0" -> "1.9"
-export const APP_VERSION = String(pkg.version).split('.').slice(0, 2).join('.');
+// "2.1.0" -> "2.1"; "2.1.1" -> "2.1.1"
+export const APP_VERSION = String(pkg.version).replace(/\.0$/, '');
 
 export const SECTIONS = [
   { id: 'principal', title: 'Navegação' },

@@ -9,9 +9,32 @@ import {
 
 const changelogData = [
   {
-    version: '2.1',
+    version: '2.1.1',
     releaseDate: '10 de Novembro de 2026',
     isLatest: true,
+    highlight: 'Observação movida para dentro da seção de detalhes de cada O.S. e remoção do "Colar e preencher".',
+    changes: [
+      {
+        type: 'melhoria',
+        title: 'Observação dentro da seção de detalhes',
+        description: 'O campo deixou o topo da página e agora fica na seção de detalhes de cada O.S. (Detalhes da O.S., Agendamento & Detalhes, Detalhes e Custo, Informações da O.S. e Detalhes do Reparo), mantendo o destaque em amarelo. No script copiado, a observação continua saindo destacada no início.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Colar e preencher removido',
+        description: 'O painel "Colar e preencher" da OS Geral foi retirado, simplificando a tela.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Versão completa na interface',
+        description: 'A versão exibida no menu lateral passou a mostrar também o número de correção (ex.: 2.1.1).'
+      }
+    ]
+  },
+  {
+    version: '2.1',
+    releaseDate: '10 de Novembro de 2026',
+    isLatest: false,
     highlight: 'Campo de Observação em todas as ordens de serviço (destacado no topo do formulário e do script), novo favicon e ajustes visuais.',
     changes: [
       {

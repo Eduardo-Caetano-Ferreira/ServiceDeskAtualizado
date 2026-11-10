@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useDebouncedStorage, useFocusFirstError, normalizeClienteDesde, normalizeTime, formatObservation } from '../lib/formUx';
-import { ObservationCard } from '../components/ObservationCard';
+import { ObservationField } from '../components/ObservationField';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, Headset, Copy, Trash2, AlertTriangle, Info, CalendarClock, Settings, Clock, Check
@@ -324,8 +324,6 @@ ${scriptExcecao}`.trim();
       {/* TÉCNICOS DA REGIÃO (ROTA DIÁRIA) */}
       <TechniciansRegion />
 
-      {/* OBSERVAÇÃO: destacada no topo e também no início do script */}
-      <ObservationCard value={formData.observacao} onChange={handleChange} />
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         
@@ -450,6 +448,7 @@ ${scriptExcecao}`.trim();
             <Settings className="w-5 h-5 text-red-500" /> 
             Detalhes do Reparo
           </h2>
+          <ObservationField value={formData.observacao} onChange={handleChange} />
           
           <div className="space-y-6">
             <div>

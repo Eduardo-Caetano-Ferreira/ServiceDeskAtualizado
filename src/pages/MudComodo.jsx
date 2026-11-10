@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useDebouncedStorage, useFocusFirstError, normalizeClienteDesde, normalizeTime, formatObservation } from '../lib/formUx';
-import { ObservationCard } from '../components/ObservationCard';
+import { ObservationField } from '../components/ObservationField';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CalendarClock, User, FileText, ShieldCheck, 
@@ -349,8 +349,6 @@ Atendente: ${operadorFinal}`.trim();
       {/* TÉCNICOS DA REGIÃO (ROTA DIÁRIA) */}
       <TechniciansRegion />
 
-      {/* OBSERVAÇÃO: destacada no topo e também no início do script */}
-      <ObservationCard value={formData.observacao} onChange={handleChange} />
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         
@@ -528,6 +526,7 @@ Atendente: ${operadorFinal}`.trim();
         {/* Bloco 3: Detalhes e Custo */}
         <div className={`${cardClass} xl:col-span-6`}>
           <h2 className={titleClass}><FileText size={18} className="text-primary" /> Detalhes e Custo</h2>
+          <ObservationField value={formData.observacao} onChange={handleChange} />
           
           <div className="mb-6">
             <div className="flex items-center justify-between mb-1.5 min-h-[24px]">

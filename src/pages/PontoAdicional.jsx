@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useDebouncedStorage, useFocusFirstError, normalizeClienteDesde, normalizeTime, formatObservation } from '../lib/formUx';
-import { ObservationCard } from '../components/ObservationCard';
+import { ObservationField } from '../components/ObservationField';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CalendarClock, User, Settings, ClipboardCheck, ShieldCheck, 
@@ -418,8 +418,6 @@ Atendente: ${operadorFinal}
       {/* TÉCNICOS DA REGIÃO (ROTA DIÁRIA) */}
       <TechniciansRegion />
 
-      {/* OBSERVAÇÃO: destacada no topo e também no início do script */}
-      <ObservationCard value={formData.observacao} onChange={handleChange} />
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         
@@ -667,6 +665,7 @@ Atendente: ${operadorFinal}
             <Settings className="w-5 h-5 text-red-500" /> 
             Informações da O.S.
           </h2>
+          <ObservationField value={formData.observacao} onChange={handleChange} />
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-6">

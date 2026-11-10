@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import {
   useDebouncedStorage, useFocusFirstError, formatDateOffset,
-  normalizeClienteDesde, normalizeTime, parseQuickPaste, formatObservation } from '../lib/formUx';
-import { ObservationCard } from '../components/ObservationCard';
+  normalizeClienteDesde, normalizeTime, formatObservation } from '../lib/formUx';
+import { ObservationField } from '../components/ObservationField';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Calendar, User, FileText, Cpu, Clock, Headset,
-  Copy, Trash2, Info, Check, ClipboardPaste, X
+  Copy, Trash2, Info, Check
 } from 'lucide-react';
 import { TechniciansRegion } from '../components/TechniciansRegion';
 import { DateInputWithCalendar } from '../components/DateInputWithCalendar';
@@ -82,42 +82,6 @@ export function OsGeral() {
 
   // Salvamento contínuo do formulário no localStorage
   useDebouncedStorage('serviceDeskScriptData', formData);
-
-  // "Colar e preencher": extrai campos de um texto colado do CRM/chat
-  const [showQuickPaste, setShowQuickPaste] = useState(false);
-  const [quickPasteText, setQuickPasteText] = useState('');
-
-  const applyQuickPaste = () => {
-    const found = parseQuickPaste(quickPasteText);
-    const filled = [];
-    const next = { ...formData };
-    if (found.clienteDesde) { next.clienteDesde = found.clienteDesde; filled.push('Cliente desde'); }
-    if (found.sinalStatus) { next.sinalStatus = found.sinalStatus; filled.push('Sinal/Status'); }
-    if (found.roteador) { next.roteador = found.roteador; filled.push('Roteador'); }
-    if (found.onu) { next.onu = found.onu; filled.push('ONU'); }
-    if (found.solicitacao) { next.solicitacao = found.solicitacao; filled.push('Solicitação'); }
-    if (found.phones?.length) {
-      const current = (formData.contatos || []).filter(c => c.numero && c.numero.trim());
-      const known = new Set(current.map(c => c.numero.replace(/\D/g, '')));
-      const added = found.phones
-        .filter(p => !known.has(p.replace(/\D/g, '')))
-        .map(p => createDefaultContact(p, false, ''));
-      if (added.length) {
-        next.contatos = [...current, ...added];
-        next.contato = formatContactsForScript(next.contatos);
-        filled.push(added.length > 1 ? `${added.length} contatos` : 'Contato');
-      }
-    }
-    if (filled.length === 0) {
-      showToast("Nada reconhecido no texto. Confira os campos manualmente.", "info");
-      return;
-    }
-    setFormData(next);
-    setErrorFields(prev => prev.filter(f => !['clienteDesde', 'sinalStatus', 'roteador', 'onu', 'solicitacao', 'contato'].includes(f)));
-    showToast(`Preenchido: ${filled.join(', ')}. Confira os dados.`, "success");
-    setQuickPasteText('');
-    setShowQuickPaste(false);
-  };
 
   // Normaliza campos livres ao sair do campo
   const handleNormalizeBlur = (name, normalizer) => {
@@ -379,47 +343,6 @@ ${scriptExcecao}`.trim();
       {/* TÉCNICOS DA REGIÃO (ROTA DIÁRIA COM PESQUISA POR CIDADE/BAIRRO) */}
       <TechniciansRegion />
 
-      {/* OBSERVAÇÃO: destacada no topo e também no início do script */}
-      <ObservationCard value={formData.observacao} onChange={handleChange} />
-
-      {/* COLAR E PREENCHER: extrai campos de um texto copiado do CRM/chat */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-2xs">
-        <button
-          type="button"
-          onClick={() => setShowQuickPaste(v => !v)}
-          aria-expanded={showQuickPaste}
-          className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold text-slate-700 hover:text-primary transition"
-        >
-          <span className="flex items-center gap-2">
-            <ClipboardPaste size={15} className="text-primary" />
-            Colar e preencher (telefone, cliente desde, sinal, roteador/ONU, solicitação)
-          </span>
-          {showQuickPaste ? <X size={14} /> : <span className="text-[11px] text-slate-400">Expandir</span>}
-        </button>
-        {showQuickPaste && (
-          <div className="px-4 pb-4 space-y-2">
-            <textarea
-              data-no-autofocus
-              value={quickPasteText}
-              onChange={(e) => setQuickPasteText(e.target.value)}
-              rows="4"
-              placeholder={"Cole aqui o texto do CRM/chat. Ex.:\nCliente desde: 03/2021\nRoteador: Comodato\nONU -21 dBm online\nContato (13) 99123-4567\nSolicitação: Cliente sem internet"}
-              className="w-full border border-slate-300 bg-slate-100 text-slate-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"
-            />
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] text-slate-400">Só preenche o que reconhecer; confira os campos depois.</span>
-              <button
-                type="button"
-                onClick={applyQuickPaste}
-                disabled={!quickPasteText.trim()}
-                className="px-4 py-1.5 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Preencher
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* GRADE COM CARTÕES LATERALIZADOS (MODELO ORIGINAL AGRADÁVEL E 100% DE LARGURA) */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-6 w-full">
@@ -564,6 +487,7 @@ ${scriptExcecao}`.trim();
             <FileText size={18} className="text-primary" /> 
             Detalhes da O.S.
           </h2>
+          <ObservationField value={formData.observacao} onChange={handleChange} />
           <div className="flex-grow">
             <label className={labelClass}>Solicitação (Motivo) *</label>
             <textarea 

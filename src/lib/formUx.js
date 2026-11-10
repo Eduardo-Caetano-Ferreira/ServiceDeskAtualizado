@@ -54,51 +54,6 @@ export const normalizeTime = (value) => {
   return `${pad2(h)}:${min}`;
 };
 
-// ---------- "Colar e preencher" ----------
-
-/**
- * Extrai campos conhecidos de um texto colado (CRM / chat).
- * Só devolve o que for encontrado com segurança; o operador confere o resultado.
- */
-export const parseQuickPaste = (text) => {
-  const out = {};
-  const src = String(text || '');
-  if (!src.trim()) return out;
-
-  // Telefones brasileiros (com ou sem DDI/máscara)
-  const phoneRe = /(?:\+?55[\s-]*)?\(?\b\d{2}\)?[\s-]*9?\d{4}[\s-]?\d{4}\b/g;
-  const phones = [...new Set((src.match(phoneRe) || []).map((p) => p.trim()))];
-  if (phones.length) out.phones = phones;
-
-  const desde = src.match(/cliente\s+desde\s*[:-]?\s*([^\n]+)/i);
-  if (desde) out.clienteDesde = normalizeClienteDesde(desde[1].trim());
-
-  const dbm = src.match(/(-\s?\d{1,2}(?:[.,]\d+)?)\s*dbm/i);
-  if (/\blos\b/i.test(src)) out.sinalStatus = 'LOS';
-  else if (/sem\s+energia/i.test(src)) out.sinalStatus = 'Sem energia';
-  else if (dbm) {
-    const num = dbm[1].replace(/\s/g, '').replace(',', '.');
-    const state = /\boffline\b/i.test(src) ? 'Offline' : 'Online';
-    out.sinalStatus = `${num}dBm / ${state}`;
-  }
-
-  const hw = (label) => {
-    const m = src.match(new RegExp(`${label}\\s*[:\\-]?\\s*(comodato|compra|smart[\\s-]?pr[eé])`, 'i'));
-    if (!m) return undefined;
-    const v = m[1].toLowerCase();
-    return v.startsWith('smart') ? 'Smart-Pré' : v === 'compra' ? 'Compra' : 'Comodato';
-  };
-  const roteador = hw('roteador');
-  const onu = hw('onu');
-  if (roteador) out.roteador = roteador;
-  if (onu) out.onu = onu;
-
-  const motivo = src.match(/(?:solicita[cç][aã]o|motivo)\s*[:-]?\s*([\s\S]+?)(?:\n\s*\n|$)/i);
-  if (motivo && motivo[1].trim()) out.solicitacao = motivo[1].trim();
-
-  return out;
-};
-
 // ---------- Rótulos amigáveis para a mensagem "Faltam: ..." ----------
 const FIELD_LABELS = {
   dataAgendamento: 'Data de Agendamento',

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useDebouncedStorage, useFocusFirstError, normalizeClienteDesde, normalizeTime } from '../lib/formUx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CalendarClock, User, Settings, ClipboardCheck, ShieldCheck, 
@@ -93,9 +94,7 @@ export function PontoAdicional() {
   }, []);
 
   // Salva no LocalStorage
-  useEffect(() => {
-    localStorage.setItem('osPontoAdicionalData', JSON.stringify(formData));
-  }, [formData]);
+  useDebouncedStorage('osPontoAdicionalData', formData);
 
   // Máscara automática de telefones fixos e celulares (Brasil)
   const formatPhone = (value) => {
@@ -405,6 +404,8 @@ Atendente: ${operadorFinal}
   const titleClass = "text-base font-bold pb-3 mb-4 text-slate-800 flex items-center gap-2 border-b border-slate-100";
   const labelClass = "block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5";
 
+  useFocusFirstError(errorFields, showToast);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -479,7 +480,7 @@ Atendente: ${operadorFinal}
                     </div>
                     <input 
                       type="text" 
-                      name="horarioApos"
+                      name="horarioApos" onBlur={() => setFormData(prev => ({ ...prev, horarioApos: normalizeTime(prev.horarioApos) }))}
                       value={formData.horarioApos}
                       onChange={handleChange}
                       placeholder="Ex: 17:30" 
@@ -643,7 +644,7 @@ Atendente: ${operadorFinal}
                 </div>
                 <input 
                   type="text" 
-                  name="clienteDesde" 
+                  name="clienteDesde" onBlur={() => setFormData(prev => ({ ...prev, clienteDesde: normalizeClienteDesde(prev.clienteDesde) }))} 
                   value={formData.clienteDesde} 
                   onChange={handleChange} 
                   placeholder="Ex: 05/2021" 
@@ -1179,7 +1180,7 @@ Atendente: ${operadorFinal}
         <div className="xl:col-span-12 flex flex-col sm:flex-row gap-4 pt-4 pb-10">
           <motion.button 
             type="button" 
-            onClick={copyScript}
+            data-action="copy-script" title="Atalho: Ctrl+Enter" onClick={copyScript}
             whileTap={{ scale: 0.98 }}
             animate={copied ? { scale: [1, 1.02, 1] } : {}}
             transition={{ duration: 0.3 }}
@@ -1218,7 +1219,7 @@ Atendente: ${operadorFinal}
           
           <button 
             type="button" 
-            onClick={() => setShowClearModal(true)}
+            data-action="clear-form" title="Atalho: Ctrl+Shift+L" onClick={() => setShowClearModal(true)}
             className="sm:w-auto bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 px-8 rounded-xl shadow-md flex justify-center items-center gap-3 transition cursor-pointer hover:scale-[1.01]"
           >
             <Trash2 size={20} /> Limpar

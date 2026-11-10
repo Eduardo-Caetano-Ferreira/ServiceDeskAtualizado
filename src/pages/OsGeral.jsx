@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react';
+import {
+  useDebouncedStorage, useFocusFirstError, formatDateOffset,
+  normalizeClienteDesde, normalizeTime, parseQuickPaste
+} from '../lib/formUx';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
+import {
   Calendar, User, FileText, Cpu, Clock, Headset,
-  Copy, Trash2, Info, Check 
+  Copy, Trash2, Info, Check, ClipboardPaste, X
 } from 'lucide-react';
 import { TechniciansRegion } from '../components/TechniciansRegion';
 import { DateInputWithCalendar } from '../components/DateInputWithCalendar';
 import { ContactSection } from '../components/ContactSection';
-import { createDefaultContact, normalizeContacts, formatContactsForScript } from '../lib/phoneUtils';
+import { HardwareSegment } from '../components/HardwareSegment';
+import { createDefaultContact, normalizeContacts, formatContactsForScript, formatPhone } from '../lib/phoneUtils';
 
 const initialState = {
   dataAgendamento: '',
@@ -75,21 +80,73 @@ export function OsGeral() {
   }, []);
 
   // Salvamento contínuo do formulário no localStorage
-  useEffect(() => {
-    localStorage.setItem('serviceDeskScriptData', JSON.stringify(formData));
-  }, [formData]);
+  useDebouncedStorage('serviceDeskScriptData', formData);
 
-  // Máscara automática para telefones fixos e celulares (Brasil)
-  const formatPhone = (value) => {
-    if (!value) return '';
-    const digits = value.replace(/\D/g, '').slice(0, 11);
-    if (digits.length === 0) return '';
-    if (digits.length <= 2) return `(${digits}`;
-    if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-    if (digits.length <= 10) {
-      return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  // "Colar e preencher": extrai campos de um texto colado do CRM/chat
+  const [showQuickPaste, setShowQuickPaste] = useState(false);
+  const [quickPasteText, setQuickPasteText] = useState('');
+
+  const applyQuickPaste = () => {
+    const found = parseQuickPaste(quickPasteText);
+    const filled = [];
+    const next = { ...formData };
+    if (found.clienteDesde) { next.clienteDesde = found.clienteDesde; filled.push('Cliente desde'); }
+    if (found.sinalStatus) { next.sinalStatus = found.sinalStatus; filled.push('Sinal/Status'); }
+    if (found.roteador) { next.roteador = found.roteador; filled.push('Roteador'); }
+    if (found.onu) { next.onu = found.onu; filled.push('ONU'); }
+    if (found.solicitacao) { next.solicitacao = found.solicitacao; filled.push('Solicitação'); }
+    if (found.phones?.length) {
+      const current = (formData.contatos || []).filter(c => c.numero && c.numero.trim());
+      const known = new Set(current.map(c => c.numero.replace(/\D/g, '')));
+      const added = found.phones
+        .filter(p => !known.has(p.replace(/\D/g, '')))
+        .map(p => createDefaultContact(p, false, ''));
+      if (added.length) {
+        next.contatos = [...current, ...added];
+        next.contato = formatContactsForScript(next.contatos);
+        filled.push(added.length > 1 ? `${added.length} contatos` : 'Contato');
+      }
     }
-    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+    if (filled.length === 0) {
+      showToast("Nada reconhecido no texto. Confira os campos manualmente.", "info");
+      return;
+    }
+    setFormData(next);
+    setErrorFields(prev => prev.filter(f => !['clienteDesde', 'sinalStatus', 'roteador', 'onu', 'solicitacao', 'contato'].includes(f)));
+    showToast(`Preenchido: ${filled.join(', ')}. Confira os dados.`, "success");
+    setQuickPasteText('');
+    setShowQuickPaste(false);
+  };
+
+  // Normaliza campos livres ao sair do campo
+  const handleNormalizeBlur = (name, normalizer) => {
+    setFormData(prev => {
+      const normalized = normalizer(prev[name]);
+      return normalized === prev[name] ? prev : { ...prev, [name]: normalized };
+    });
+  };
+
+  // Igual ao roteador: caso mais comum, copia a opção do roteador para a ONU
+  const handleOnuSameAsRouter = () => {
+    if (!formData.roteador) return;
+    handleSelectOnu(formData.roteador);
+  };
+
+  // Sinal em dBm digitado só com o número: monta "-20dBm / Online"
+  const handleDbmShortcut = (raw) => {
+    const num = raw.replace(',', '.').replace(/[^\d.-]/g, '');
+    if (!num) {
+      setFormData(prev => ({ ...prev, sinalStatus: '' }));
+      return;
+    }
+    const signed = num.startsWith('-') ? num : `-${num}`;
+    setFormData(prev => ({ ...prev, sinalStatus: `${signed}dBm / Online` }));
+    setErrorFields(prev => prev.filter(f => f !== 'sinalStatus'));
+  };
+
+  const setDateOffset = (fieldName, days) => {
+    setFormData(prev => ({ ...prev, [fieldName]: formatDateOffset(days) }));
+    setErrorFields(prev => prev.filter(field => field !== fieldName));
   };
 
   const handleChange = (e) => {
@@ -305,30 +362,12 @@ ${scriptExcecao}`.trim();
   const statusShortcuts = [
     { label: 'LOS', value: 'LOS', color: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' },
     { label: 'Sem energia', value: 'Sem energia', color: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' },
-    { label: 'Não encontrado/desprovisionado', value: 'Não encontrado/desprovisionado', color: 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200' }
+    { label: 'Não encontrado/desprovisionado', value: 'Não encontrado/desprovisionado', color: 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200' },
+    { label: 'Online', value: 'Online', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' },
+    { label: 'Offline', value: 'Offline', color: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100' }
   ];
 
-  // Opções para Roteador e ONU
-  const hardwareOptions = [
-    { 
-      label: 'Comodato', 
-      color: 'emerald', 
-      activeClass: 'bg-emerald-600 text-white border-emerald-700 shadow-sm ring-1 ring-emerald-400',
-      inactiveClass: 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-    },
-    { 
-      label: 'Compra', 
-      color: 'blue', 
-      activeClass: 'bg-blue-600 text-white border-blue-700 shadow-sm ring-1 ring-blue-400',
-      inactiveClass: 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100'
-    },
-    { 
-      label: 'Smart-Pré', 
-      color: 'red', 
-      activeClass: 'bg-red-600 text-white border-red-700 shadow-sm ring-1 ring-red-400',
-      inactiveClass: 'bg-red-50 text-red-800 border-red-200 hover:bg-red-100'
-    }
-  ];
+  useFocusFirstError(errorFields, showToast);
 
   return (
     <motion.div 
@@ -338,6 +377,45 @@ ${scriptExcecao}`.trim();
     >
       {/* TÉCNICOS DA REGIÃO (ROTA DIÁRIA COM PESQUISA POR CIDADE/BAIRRO) */}
       <TechniciansRegion />
+
+      {/* COLAR E PREENCHER: extrai campos de um texto copiado do CRM/chat */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-2xs">
+        <button
+          type="button"
+          onClick={() => setShowQuickPaste(v => !v)}
+          aria-expanded={showQuickPaste}
+          className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold text-slate-700 hover:text-primary transition"
+        >
+          <span className="flex items-center gap-2">
+            <ClipboardPaste size={15} className="text-primary" />
+            Colar e preencher (telefone, cliente desde, sinal, roteador/ONU, solicitação)
+          </span>
+          {showQuickPaste ? <X size={14} /> : <span className="text-[11px] text-slate-400">Expandir</span>}
+        </button>
+        {showQuickPaste && (
+          <div className="px-4 pb-4 space-y-2">
+            <textarea
+              data-no-autofocus
+              value={quickPasteText}
+              onChange={(e) => setQuickPasteText(e.target.value)}
+              rows="4"
+              placeholder={"Cole aqui o texto do CRM/chat. Ex.:\nCliente desde: 03/2021\nRoteador: Comodato\nONU -21 dBm online\nContato (13) 99123-4567\nSolicitação: Cliente sem internet"}
+              className="w-full border border-slate-300 bg-slate-100 text-slate-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"
+            />
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-slate-400">Só preenche o que reconhecer; confira os campos depois.</span>
+              <button
+                type="button"
+                onClick={applyQuickPaste}
+                disabled={!quickPasteText.trim()}
+                className="px-4 py-1.5 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Preencher
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* GRADE COM CARTÕES LATERALIZADOS (MODELO ORIGINAL AGRADÁVEL E 100% DE LARGURA) */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-6 w-full">
@@ -352,13 +430,29 @@ ${scriptExcecao}`.trim();
             <div>
               <div className="flex justify-between items-center mb-1.5">
                 <label className={labelClass}>Data de Agendamento *</label>
-                <button
-                  type="button"
-                  onClick={() => setTodayDate('dataAgendamento')}
-                  className="text-xs text-primary font-semibold hover:underline cursor-pointer flex items-center gap-1"
-                >
-                  Hoje ({getTodayFormatted()})
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTodayDate('dataAgendamento')}
+                    className="text-xs text-primary font-semibold hover:underline cursor-pointer"
+                  >
+                    Hoje
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDateOffset('dataAgendamento', 1)}
+                    className="text-xs text-primary font-semibold hover:underline cursor-pointer"
+                  >
+                    Amanhã
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDateOffset('dataAgendamento', 2)}
+                    className="text-xs text-primary font-semibold hover:underline cursor-pointer"
+                  >
+                    +2 dias
+                  </button>
+                </div>
               </div>
               <DateInputWithCalendar 
                 name="dataAgendamento" 
@@ -390,8 +484,9 @@ ${scriptExcecao}`.trim();
                     type="text" 
                     name="horarioApos" 
                     value={formData.horarioApos} 
-                    onChange={handleChange} 
-                    placeholder="Ex: 16:30" 
+                    onChange={handleChange}
+                    onBlur={() => handleNormalizeBlur('horarioApos', normalizeTime)}
+                    placeholder="Ex: 16:30 ou 1630"
                     className={getInputClass('horarioApos')} 
                   />
                 </motion.div>
@@ -408,74 +503,38 @@ ${scriptExcecao}`.trim();
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             
-            {/* Opções de Roteador em Coluna */}
-            <div>
-              <label className={labelClass}>Roteador *</label>
-              <div className={`flex flex-col gap-2 p-1.5 rounded-xl border transition-all ${
-                errorFields.includes('roteador')
-                  ? 'border-red-500 bg-red-50/50 ring-1 ring-red-500 animate-error'
-                  : 'border-slate-200 bg-slate-50/70'
-              }`}>
-                {hardwareOptions.map((opt) => {
-                  const isSelected = formData.roteador === opt.label;
-                  return (
-                    <button
-                      key={opt.label}
-                      type="button"
-                      onClick={() => handleSelectRoteador(opt.label)}
-                      className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex items-center justify-between shadow-2xs ${
-                        isSelected ? opt.activeClass : opt.inactiveClass
-                      }`}
-                    >
-                      <span>{opt.label}</span>
-                      {isSelected ? (
-                        <Check size={14} className="text-white" />
-                      ) : (
-                        <span className={`w-2 h-2 rounded-full ${
-                          opt.color === 'emerald' ? 'bg-emerald-400' : opt.color === 'blue' ? 'bg-blue-400' : 'bg-red-400'
-                        }`} />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+            {/* Roteador e ONU: seletores compactos lado a lado */}
+            <div className="sm:col-span-2">
+              <HardwareSegment
+                label="Roteador"
+                value={formData.roteador}
+                onSelect={handleSelectRoteador}
+                hasError={errorFields.includes('roteador')}
+              />
             </div>
 
-            {/* Opções de ONU em Coluna */}
-            <div>
-              <label className={labelClass}>ONU *</label>
-              <div className={`flex flex-col gap-2 p-1.5 rounded-xl border transition-all ${
-                errorFields.includes('onu')
-                  ? 'border-red-500 bg-red-50/50 ring-1 ring-red-500 animate-error'
-                  : 'border-slate-200 bg-slate-50/70'
-              }`}>
-                {hardwareOptions.map((opt) => {
-                  const isSelected = formData.onu === opt.label;
-                  return (
-                    <button
-                      key={opt.label}
-                      type="button"
-                      onClick={() => handleSelectOnu(opt.label)}
-                      className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex items-center justify-between shadow-2xs ${
-                        isSelected ? opt.activeClass : opt.inactiveClass
-                      }`}
-                    >
-                      <span>{opt.label}</span>
-                      {isSelected ? (
-                        <Check size={14} className="text-white" />
-                      ) : (
-                        <span className={`w-2 h-2 rounded-full ${
-                          opt.color === 'emerald' ? 'bg-emerald-400' : opt.color === 'blue' ? 'bg-blue-400' : 'bg-red-400'
-                        }`} />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="sm:col-span-2">
+              <HardwareSegment
+                label="ONU"
+                value={formData.onu}
+                onSelect={handleSelectOnu}
+                hasError={errorFields.includes('onu')}
+                extra={
+                  <button
+                    type="button"
+                    onClick={handleOnuSameAsRouter}
+                    disabled={!formData.roteador}
+                    className="text-xs text-primary font-semibold hover:underline cursor-pointer disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
+                    title="Copia a opção escolhida no Roteador"
+                  >
+                    Igual ao roteador
+                  </button>
+                }
+              />
             </div>
 
             {/* Seção de Contatos com Máscara +55, Múltiplas Linhas, Titular e Switch */}
-            <div className="sm:col-span-2 xl:col-span-1">
+            <div className="sm:col-span-2">
               <ContactSection
                 contatos={formData.contatos}
                 onChangeContatos={handleContatosChange}
@@ -489,14 +548,15 @@ ${scriptExcecao}`.trim();
               />
             </div>
 
-            <div className="sm:col-span-2 xl:col-span-1">
+            <div className="sm:col-span-2">
               <label className={labelClass}>Cliente desde *</label>
               <input 
                 type="text" 
                 name="clienteDesde" 
                 value={formData.clienteDesde} 
-                onChange={handleChange} 
-                placeholder="Ex: 01/2020" 
+                onChange={handleChange}
+                onBlur={() => handleNormalizeBlur('clienteDesde', normalizeClienteDesde)}
+                placeholder="Ex: 01/2020 ou 012020"
                 className={getInputClass('clienteDesde')} 
               />
             </div>
@@ -566,6 +626,18 @@ ${scriptExcecao}`.trim();
                     </button>
                   );
                 })}
+                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 ml-1">
+                  dBm:
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    aria-label="Sinal em dBm"
+                    placeholder="20"
+                    onChange={(e) => handleDbmShortcut(e.target.value)}
+                    className="w-14 border border-slate-300 bg-slate-100 text-slate-800 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-primary"
+                    title="Digite só o número (ex.: 20): vira -20dBm / Online"
+                  />
+                </label>
               </div>
             </div>
 
@@ -657,7 +729,7 @@ ${scriptExcecao}`.trim();
                     Atendente Vinculado
                   </span>
                   <span className="text-xs font-bold text-slate-800">
-                    {formData.nomeAtendente || localStorage.getItem('serviceDesk_operador') || 'Operador Conectado'}
+                    {formData.nomeAtendente || 'Operador Conectado'}
                   </span>
                 </div>
               </div>
@@ -693,7 +765,7 @@ ${scriptExcecao}`.trim();
         <div className="xl:col-span-12 flex flex-col sm:flex-row gap-4 pt-2">
           <motion.button 
             type="button" 
-            onClick={copiarScript}
+            data-action="copy-script" title="Atalho: Ctrl+Enter" onClick={copiarScript}
             whileTap={{ scale: 0.98 }}
             className={`flex-1 font-bold py-4 px-6 rounded-xl shadow-md flex justify-center items-center gap-3 transition-all duration-300 transform ${
               copied 
@@ -730,7 +802,7 @@ ${scriptExcecao}`.trim();
           
           <button 
             type="button"
-            onClick={() => setShowClearModal(true)} 
+            data-action="clear-form" title="Atalho: Ctrl+Shift+L" onClick={() => setShowClearModal(true)} 
             className="sm:w-auto bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 px-8 rounded-xl shadow-md flex justify-center items-center gap-3 transition transform hover:scale-[1.01]"
           >
             <Trash2 size={20} /> Limpar

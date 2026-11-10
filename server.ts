@@ -51,7 +51,8 @@ async function startServer() {
       console.log(`[extract] ok com ${model} em ${latencyMs}ms (${attempts.length} tentativa(s))`);
       res.json({ ...data, modelUsed: model, latencyMs, attempts });
     } catch (err) {
-      const { status, body } = errorPayload(err);
+      const { status, body, retryAfterSec } = errorPayload(err) as any;
+      if (retryAfterSec) res.setHeader("Retry-After", String(retryAfterSec));
       console.error("[extract] falhou:", JSON.stringify(body));
       res.status(status).json(body);
     }

@@ -27,6 +27,7 @@ export function Inicio() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [retryCountdown, setRetryCountdown] = useState(0);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'moto', 'car'
@@ -186,48 +187,46 @@ export function Inicio() {
     e.preventDefault();
   };
 
-  // Compress image before uploading
+  // Redimensiona (máx. 1600px) e reencoda como JPEG até o base64 ficar abaixo de ~3 MB,
+  // para não estourar o limite de ~4,5 MB do body das funções da Vercel.
+  const MAX_DIM = 1600;
+  const MAX_BASE64_BYTES = 3 * 1024 * 1024;
   const compressImageIfNeeded = async (file) => {
+    const estimateBase64 = (bytes) => Math.ceil(bytes * 1.37);
     return new Promise((resolve) => {
-      if (file.size < 800 * 1024) {
-        return resolve(file);
-      }
       try {
         const img = new Image();
         const url = URL.createObjectURL(file);
-        img.onload = () => {
+        img.onload = async () => {
           URL.revokeObjectURL(url);
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          const maxDim = 1600;
-          if (width > maxDim || height > maxDim) {
-            if (width > height) {
-              height = Math.round((height * maxDim) / width);
-              width = maxDim;
-            } else {
-              width = Math.round((width * maxDim) / height);
-              height = maxDim;
-            }
+          const needsResize = img.width > MAX_DIM || img.height > MAX_DIM;
+          if (!needsResize && estimateBase64(file.size) <= MAX_BASE64_BYTES && file.size < 800 * 1024) {
+            return resolve(file);
           }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) return resolve(file);
-          ctx.drawImage(img, 0, 0, width, height);
-          canvas.toBlob(
-            (blob) => {
-              if (!blob) return resolve(file);
-              const fileName = file.name ? file.name.replace(/\.[^/.]+$/, ".jpg") : "escala.jpg";
-              const compressedFile = new File([blob], fileName, {
-                type: 'image/jpeg',
-                lastModified: Date.now(),
-              });
-              resolve(compressedFile);
-            },
-            'image/jpeg',
-            0.82
-          );
+
+          let scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+          let quality = 0.82;
+          const fileName = file.name ? file.name.replace(/\.[^/.]+$/, ".jpg") : "escala.jpg";
+
+          for (let i = 0; i < 6; i++) {
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(img.width * scale));
+            canvas.height = Math.max(1, Math.round(img.height * scale));
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return resolve(file);
+            ctx.fillStyle = '#ffffff'; // PNG transparente vira fundo branco no JPEG
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', quality));
+            if (!blob) return resolve(file);
+            if (estimateBase64(blob.size) <= MAX_BASE64_BYTES || i === 5) {
+              return resolve(new File([blob], fileName, { type: 'image/jpeg', lastModified: Date.now() }));
+            }
+            quality = Math.max(0.5, quality - 0.1);
+            scale *= 0.8;
+          }
+          resolve(file);
         };
         img.onerror = () => resolve(file);
         img.src = url;
@@ -338,7 +337,18 @@ export function Inicio() {
           } else {
             lastErrorMessage = friendlyError(parsed, response.status);
             setLastAttempts(Array.isArray(parsed.attempts) ? parsed.attempts : []);
-            break; // erro vindo do servidor: o failover já foi esgotado
+
+            // Indisponibilidade temporária: respeita o Retry-After enviado pelo servidor
+            const retryHeader = Number(response.headers.get('Retry-After')) || parsed.retryAfterSec || 0;
+            if (response.status === 503 && retryHeader > 0 && retryHeader <= 30 && attempt < 2) {
+              for (let s = retryHeader; s > 0; s--) {
+                setRetryCountdown(s);
+                await new Promise((r) => setTimeout(r, 1000));
+              }
+              setRetryCountdown(0);
+              continue;
+            }
+            break; // erro definitivo ou failover esgotado
           }
         } catch (fetchErr) {
           lastErrorMessage = fetchErr?.message || "Erro de conexão ao enviar a imagem.";
@@ -370,6 +380,15 @@ export function Inicio() {
   // Publica a escala revisada, guardando a anterior como backup
   const handleConfirmPublish = async () => {
     if (!pending) return;
+    const clean = (list) => list
+      .map((t) => ({ name: (t.name || '').trim(), region: (t.region || '').trim(), city: (t.city || '').trim(), obs: (t.obs || '').trim() }))
+      .filter((t) => t.name);
+    const cleanMoto = clean(pending.moto);
+    const cleanCar = clean(pending.car);
+    if (cleanMoto.length + cleanCar.length === 0) {
+      setError("A escala está vazia. Descarte ou mantenha ao menos um técnico.");
+      return;
+    }
     setIsPublishing(true);
     setError(null);
     try {
@@ -385,8 +404,8 @@ export function Inicio() {
       }
 
       await setDoc(doc(db, "techniciansList", "current"), {
-        moto: pending.moto,
-        car: pending.car,
+        moto: cleanMoto,
+        car: cleanCar,
         updatedAt: nowIso,
         geminiLastSync: nowIso,
         geminiStatus: 'online',
@@ -416,6 +435,17 @@ export function Inicio() {
   };
 
   const handleDiscardPending = () => setPending(null);
+
+  const updatePendingItem = (list, idx, field, value) => {
+    setPending((p) => ({
+      ...p,
+      [list]: p[list].map((t, i) => (i === idx ? { ...t, [field]: value } : t))
+    }));
+  };
+
+  const removePendingItem = (list, idx) => {
+    setPending((p) => ({ ...p, [list]: p[list].filter((_, i) => i !== idx) }));
+  };
 
   // Restaura a escala anterior (backup salvo na última publicação)
   const handleUndo = async () => {
@@ -571,7 +601,7 @@ export function Inicio() {
             {isUploading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin text-white" />
-                Extraindo Técnicos com Gemini...
+                {retryCountdown > 0 ? `IA ocupada, nova tentativa em ${retryCountdown}s...` : 'Extraindo Técnicos com Gemini...'}
               </>
             ) : (
               <>
@@ -599,12 +629,32 @@ export function Inicio() {
                   )}
                 </div>
               </div>
-              <div className="max-h-32 overflow-y-auto rounded-lg border border-amber-200 bg-white text-[11px] divide-y divide-slate-100">
-                {[...pending.moto.map(t => ({ ...t, tipo: 'MOTO' })), ...pending.car.map(t => ({ ...t, tipo: 'CARRO' }))].map((t, i) => (
-                  <div key={i} className="px-2.5 py-1.5 flex items-center gap-2">
-                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${t.tipo === 'MOTO' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>{t.tipo}</span>
-                    <span className="font-bold text-slate-800 truncate">{t.name}</span>
-                    <span className="text-slate-500 truncate">{[t.region, t.city].filter(Boolean).join(' • ')}</span>
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-amber-200 bg-white text-[11px] divide-y divide-slate-100">
+                {[
+                  ...pending.moto.map((t, idx) => ({ t, idx, list: 'moto' })),
+                  ...pending.car.map((t, idx) => ({ t, idx, list: 'car' }))
+                ].map(({ t, idx, list }) => (
+                  <div key={`${list}-${idx}`} className="px-2 py-1.5 flex items-center gap-1.5">
+                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded shrink-0 ${list === 'moto' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
+                      {list === 'moto' ? 'MOTO' : 'CARRO'}
+                    </span>
+                    {['name', 'region', 'city'].map((field) => (
+                      <input
+                        key={field}
+                        value={t[field] || ''}
+                        onChange={(e) => updatePendingItem(list, idx, field, e.target.value)}
+                        placeholder={field === 'name' ? 'Nome' : field === 'region' ? 'Região' : 'Cidade'}
+                        className={`min-w-0 flex-1 px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-[11px] focus:outline-none focus:border-red-500 ${field === 'name' ? 'font-bold text-slate-800' : 'text-slate-600'}`}
+                      />
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => removePendingItem(list, idx)}
+                      title="Remover da escala"
+                      className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 shrink-0"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 ))}
               </div>

@@ -411,9 +411,12 @@ export function readImagePayload(body: any): { base64: string; mimeType: string 
 
 export function errorPayload(err: unknown) {
   if (err instanceof ExtractError) {
+    // Sugere ao cliente quando tentar de novo (só para indisponibilidade temporária)
+    const retryAfterSec = err.kind === "exhausted" && err.httpStatus === 503 ? 15 : undefined;
     return {
       status: err.httpStatus,
-      body: { error: err.kind, details: err.message, kind: err.kind, attempts: err.attempts },
+      retryAfterSec,
+      body: { error: err.kind, details: err.message, kind: err.kind, attempts: err.attempts, retryAfterSec },
     };
   }
   const e = err as any;

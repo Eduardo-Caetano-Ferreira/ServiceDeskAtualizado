@@ -164,6 +164,7 @@ export function TechniciansRegion() {
             <Search size={13} className="text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input 
               type="text"
+              data-no-autofocus
               placeholder="Pesquisar cidade ou bairro..."
               value={searchQuery}
               onChange={(e) => {

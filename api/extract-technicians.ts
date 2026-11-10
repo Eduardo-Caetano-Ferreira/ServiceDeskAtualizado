@@ -19,7 +19,8 @@ export default async function handler(req: any, res: any) {
     console.log(`[extract] ok com ${model} em ${latencyMs}ms (${attempts.length} tentativa(s))`);
     return res.status(200).json({ ...data, modelUsed: model, latencyMs, attempts });
   } catch (err) {
-    const { status, body } = errorPayload(err);
+    const { status, body, retryAfterSec } = errorPayload(err) as any;
+    if (retryAfterSec) res.setHeader("Retry-After", String(retryAfterSec));
     console.error("[extract] falhou:", JSON.stringify(body));
     return res.status(status).json(body);
   }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ThemeProvider } from './context/ThemeContext';
 import { useTheme } from './context/themeCore';
 import { NavBar } from './components/NavBar';
@@ -14,6 +14,15 @@ import { Changelog } from './pages/Changelog';
 import { EncerramentoAtendimento } from './pages/EncerramentoAtendimento';
 import { ScriptsChat } from './pages/ScriptsChat';
 import { OperatorModal } from './components/OperatorModal';
+
+// Ordem do menu lateral: Alt+1..9 e Alt+0 (10º item)
+const NAV_SHORTCUT_ORDER = [
+  'index', 'consulta_ceps', 'os_geral', 'mud_endereco', 'mud_comodo',
+  'ponto_adicional', 'reparo_tv', 'encerramento', 'scripts_chat', 'feedback'
+];
+
+// Telas cujo primeiro campo é busca/filtro: não recebem foco automático
+const NO_AUTOFOCUS_PAGES = ['index', 'consulta_ceps', 'scripts_chat', 'changelog'];
 
 function AppContent() {
   const [paginaAtual, setPaginaAtual] = useState('os_geral');
@@ -34,6 +43,62 @@ function AppContent() {
     const savedName = localStorage.getItem('serviceDesk_operador');
     return !savedName || savedName.trim() === '';
   });
+
+  // Atalhos globais de teclado
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      const mod = e.ctrlKey || e.metaKey;
+
+      // Ctrl+Enter: validar e copiar o script da tela atual
+      if (mod && !e.shiftKey && !e.altKey && e.key === 'Enter') {
+        const btn = document.querySelector('[data-action="copy-script"]');
+        if (btn) {
+          e.preventDefault();
+          btn.click();
+        }
+        return;
+      }
+
+      // Ctrl+Shift+L: limpar o formulário (abre a confirmação)
+      if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'l') {
+        const btn = document.querySelector('[data-action="clear-form"]');
+        if (btn) {
+          e.preventDefault();
+          btn.click();
+        }
+        return;
+      }
+
+      // Alt+1..9 / Alt+0: trocar de tela
+      if (e.altKey && !mod && !e.shiftKey && /^Digit[0-9]$/.test(e.code)) {
+        const n = Number(e.code.slice(5));
+        const target = NAV_SHORTCUT_ORDER[n === 0 ? 9 : n - 1];
+        if (target) {
+          e.preventDefault();
+          setPaginaAtual(target);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  // Foco automático no primeiro campo vazio ao abrir uma tela de preenchimento
+  useEffect(() => {
+    if (NO_AUTOFOCUS_PAGES.includes(paginaAtual) || isOperatorModalOpen) return;
+    const t = setTimeout(() => {
+      const candidates = document.querySelectorAll(
+        'main input[type="text"], main input[type="tel"], main input:not([type]), main textarea'
+      );
+      for (const el of candidates) {
+        if (el.value || el.disabled || el.readOnly || el.dataset.noAutofocus !== undefined) continue;
+        if (el.offsetParent === null || el.closest('.fixed')) continue; // oculto ou dentro de modal
+        el.focus({ preventScroll: true });
+        break;
+      }
+    }, 450); // aguarda a animação de entrada da tela
+    return () => clearTimeout(t);
+  }, [paginaAtual, isOperatorModalOpen]);
 
   const handleToggleCollapse = (collapsedState) => {
     setIsCollapsed(collapsedState);

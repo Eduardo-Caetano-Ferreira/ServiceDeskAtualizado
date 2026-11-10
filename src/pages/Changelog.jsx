@@ -9,9 +9,52 @@ import {
 
 const changelogData = [
   {
-    version: '1.8',
+    version: '1.9',
     releaseDate: '10 de Novembro de 2026',
     isLatest: true,
+    highlight: 'Preenchimento mais rápido: atalhos de teclado, foco automático, "Colar e preencher", normalização de campos e revisão editável da escala lida pela IA.',
+    changes: [
+      {
+        type: 'novo',
+        title: 'Atalhos de teclado',
+        description: 'Ctrl+Enter valida e copia o script da tela atual, Ctrl+Shift+L abre a confirmação de limpeza e Alt+1…9/0 troca de tela na ordem do menu lateral.'
+      },
+      {
+        type: 'novo',
+        title: 'Colar e preencher (OS Geral)',
+        description: 'Cole o texto do CRM ou chat e o sistema preenche telefone, cliente desde, sinal, roteador, ONU e solicitação. Só preenche o que reconhece e informa o que foi preenchido para conferência.'
+      },
+      {
+        type: 'novo',
+        title: 'Foco automático e erro mais claro',
+        description: 'Ao abrir uma tela o foco vai para o primeiro campo vazio. Ao tentar copiar com pendências, a mensagem lista os campos que faltam ("Faltam: Período, ONU…") e a tela rola até o primeiro campo destacado.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Normalização de Cliente desde e Horário',
+        description: '"Cliente desde" aceita 012020, 1/2020 ou 01-20 e vira 01/2020; "Horário" aceita 1630 ou 16h30 e vira 16:30. Aplicado em OS Geral, Mudança de Endereço, Mudança de Cômodo, Ponto Adicional e Reparo TV.'
+      },
+      {
+        type: 'melhoria',
+        title: 'OS Geral mais compacta',
+        description: 'Roteador e ONU em três botões lado a lado com "Igual ao roteador", datas rápidas (Hoje, Amanhã, +2 dias) e atalhos de sinal Online/Offline e campo de dBm (digitar 20 vira -20dBm / Online).'
+      },
+      {
+        type: 'melhoria',
+        title: 'Revisão editável da escala e novas proteções da IA',
+        description: 'Na revisão antes de publicar é possível corrigir nome, região e cidade ou remover técnicos. Em indisponibilidade temporária o sistema respeita o Retry-After e tenta de novo, e imagens grandes são redimensionadas e comprimidas para não estourar o limite de envio.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Gravação do rascunho sem sobrecarga',
+        description: 'Os formulários passaram a salvar o rascunho com atraso curto (debounce), gravando imediatamente ao sair da tela para não perder o que foi digitado.'
+      }
+    ]
+  },
+  {
+    version: '1.8',
+    releaseDate: '10 de Novembro de 2026',
+    isLatest: false,
     highlight: 'Alta disponibilidade da leitura de escala com IA: failover em cadeia (modelos e chaves), retry com backoff e revisão do resultado antes de publicar.',
     changes: [
       {

@@ -1,0 +1,24 @@
+{
+  "name": "Service Desk",
+  "short_name": "Service Desk",
+  "description": "Scripts de O.S., encerramentos e escala de técnicos para o atendimento.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "lang": "pt-BR",
+  "background_color": "#f5f5f7",
+  "theme_color": "#d6334f",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "OS Geral", "short_name": "OS Geral", "url": "/?page=os_geral", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Scripts de Chat", "short_name": "Scripts", "url": "/?page=scripts_chat", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Atualizar Rota", "short_name": "Rota", "url": "/?page=atualizar_rota", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

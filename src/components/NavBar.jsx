@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Radio, Edit3, Sparkles, History } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Radio, Edit3, Sparkles, History, X, Download } from 'lucide-react';
 import { ThemeSwitch } from './ThemeSwitch';
 import { PAGES, SECTIONS, APP_VERSION } from '../lib/navConfig';
+import { usePwaInstall } from '../lib/pwa';
 
 const getInitials = (fullName) => {
   if (!fullName) return 'OP';
@@ -13,12 +14,18 @@ const getInitials = (fullName) => {
 export function NavBar({
   active,
   setActive,
-  isCollapsed,
+  isCollapsed: collapsedPref,
   setIsCollapsed,
   operatorName,
-  onEditOperator
+  onEditOperator,
+  isDrawer = false,
+  drawerOpen = false,
+  onCloseDrawer
 }) {
   const [logoError, setLogoError] = useState(false);
+  const { canInstall, install } = usePwaInstall();
+  // Em telas estreitas o menu vira uma gaveta (sempre expandida)
+  const isCollapsed = !isDrawer && collapsedPref;
   const isChangelogActive = active === 'changelog';
 
   const tooltip = (children) => (
@@ -30,8 +37,13 @@ export function NavBar({
   return (
     <nav
       aria-label="Navegação principal"
-      className={`fixed left-0 top-0 h-screen z-40 flex flex-col glass border-r border-[color:var(--hairline)] text-[color:var(--text)] transition-[width] duration-300 ${
-        isCollapsed ? 'w-20' : 'w-64'
+      aria-hidden={isDrawer && !drawerOpen ? true : undefined}
+      className={`fixed left-0 top-0 h-dvh flex flex-col border-r border-[color:var(--hairline)] text-[color:var(--text)] ${
+        isDrawer
+          ? `z-50 w-72 max-w-[85vw] bg-[color:var(--surface)] transition-[transform,visibility] duration-300 ${
+              drawerOpen ? 'translate-x-0 visible shadow-2xl' : '-translate-x-full invisible'
+            }`
+          : `z-40 glass transition-[width] duration-300 ${isCollapsed ? 'w-20' : 'w-64'}`
       }`}
     >
       {/* MARCA */}
@@ -62,15 +74,26 @@ export function NavBar({
           )}
         </button>
 
-        <button
-          type="button"
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          aria-label={isCollapsed ? 'Expandir barra lateral' : 'Recolher barra lateral'}
-          title={isCollapsed ? 'Expandir barra lateral' : 'Recolher barra lateral'}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-[color:var(--text-3)] hover:text-[color:var(--text)] hover:bg-[color:var(--hairline)] transition-colors cursor-pointer shrink-0"
-        >
-          {isCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
-        </button>
+        {isDrawer ? (
+          <button
+            type="button"
+            onClick={onCloseDrawer}
+            aria-label="Fechar menu"
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-[color:var(--text-2)] hover:text-[color:var(--text)] hover:bg-[color:var(--hairline)] transition-colors cursor-pointer shrink-0"
+          >
+            <X size={18} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            aria-label={isCollapsed ? 'Expandir barra lateral' : 'Recolher barra lateral'}
+            title={isCollapsed ? 'Expandir barra lateral' : 'Recolher barra lateral'}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[color:var(--text-3)] hover:text-[color:var(--text)] hover:bg-[color:var(--hairline)] transition-colors cursor-pointer shrink-0"
+          >
+            {isCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+          </button>
+        )}
       </div>
 
       {/* NAVEGAÇÃO */}
@@ -134,6 +157,21 @@ export function NavBar({
 
       {/* RODAPÉ: TEMA, NOVIDADES E OPERADOR */}
       <div className="shrink-0 p-3 border-t border-[color:var(--hairline)] space-y-1">
+        {canInstall && (
+          <button
+            type="button"
+            onClick={install}
+            title="Instalar como aplicativo"
+            className={`group relative w-full flex items-center rounded-xl transition-colors cursor-pointer text-[color:var(--accent)] hover:bg-[color:var(--accent-soft)] font-semibold ${
+              isCollapsed ? 'justify-center h-11' : 'gap-3 px-3 py-2'
+            }`}
+          >
+            <Download size={isCollapsed ? 20 : 17} className="shrink-0" />
+            {!isCollapsed && <span className="text-[13px]">Instalar aplicativo</span>}
+            {isCollapsed && tooltip(<>Instalar aplicativo</>)}
+          </button>
+        )}
+
         <ThemeSwitch isCollapsed={isCollapsed} />
 
         <button

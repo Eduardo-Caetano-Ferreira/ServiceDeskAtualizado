@@ -15,7 +15,9 @@ import { Changelog } from './pages/Changelog';
 import { EncerramentoAtendimento } from './pages/EncerramentoAtendimento';
 import { ScriptsChat } from './pages/ScriptsChat';
 import { OperatorModal } from './components/OperatorModal';
-import { SHORTCUT_BY_CODE } from './lib/navConfig';
+import { SHORTCUT_BY_CODE, PAGES } from './lib/navConfig';
+import { useMediaQuery } from './lib/useMediaQuery';
+import { usePwaUpdate } from './lib/pwa';
 
 // Telas cujo primeiro campo é busca/filtro: não recebem foco automático
 const NO_AUTOFOCUS_PAGES = ['home', 'consulta_ceps', 'scripts_chat', 'atualizar_rota', 'changelog'];
@@ -35,7 +37,25 @@ const PAGES_COMPONENTS = {
 };
 
 function AppContent() {
-  const [paginaAtual, setPaginaAtual] = useState('home');
+  const [paginaAtual, setPaginaAtual] = useState(() => {
+    // atalhos do app instalado (manifest) abrem direto na tela: /?page=os_geral
+    try {
+      const p = new URLSearchParams(window.location.search).get('page');
+      return PAGES.some((x) => x.id === p) ? p : 'home';
+    } catch {
+      return 'home';
+    }
+  });
+
+  // Telas estreitas (janela encostada no canto, celular): o menu vira uma gaveta
+  const isCompact = useMediaQuery('(max-width: 1023px)');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const showDrawer = isCompact && drawerOpen;
+  const navigate = (id) => {
+    setPaginaAtual(id);
+    setDrawerOpen(false);
+  };
+  const { updateReady, applyUpdate } = usePwaUpdate();
 
   // Controle de recolhimento da barra lateral
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -56,6 +76,7 @@ function AppContent() {
   // Atalhos globais de teclado
   useEffect(() => {
     const onKeyDown = (e) => {
+      if (e.key === 'Escape') setDrawerOpen(false);
       const mod = e.ctrlKey || e.metaKey;
 
       // Ctrl+Enter: validar e copiar o script da tela atual
@@ -82,6 +103,7 @@ function AppContent() {
       if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setPaginaAtual('home');
+        setDrawerOpen(false);
         setTimeout(() => document.querySelector('[data-home-search]')?.focus(), 120);
         return;
       }
@@ -92,6 +114,7 @@ function AppContent() {
         if (target) {
           e.preventDefault();
           setPaginaAtual(target);
+          setDrawerOpen(false);
         }
       }
     };
@@ -137,26 +160,47 @@ function AppContent() {
   const PageComponent = PAGES_COMPONENTS[paginaAtual];
 
   return (
-    <div className="app-shell min-h-screen font-sans flex">
-      {/* Barra lateral translúcida com recolher, tema e operador */}
+    <div className="app-shell min-h-dvh font-sans flex">
+      {/* Menu: barra lateral fixa em telas largas; gaveta em telas estreitas */}
       <NavBar
         active={paginaAtual}
-        setActive={setPaginaAtual}
+        setActive={navigate}
         isCollapsed={isCollapsed}
         setIsCollapsed={handleToggleCollapse}
         operatorName={operatorName}
-        onEditOperator={() => setIsOperatorModalOpen(true)}
+        onEditOperator={() => {
+          setDrawerOpen(false);
+          setIsOperatorModalOpen(true);
+        }}
+        isDrawer={isCompact}
+        drawerOpen={showDrawer}
+        onCloseDrawer={() => setDrawerOpen(false)}
       />
 
-      {/* Conteúdo principal com margem adaptativa de acordo com a barra lateral */}
-      <main className={`flex-1 min-w-0 px-4 sm:px-6 md:px-8 pb-10 transition-[margin] duration-300 w-full ${
-        isCollapsed ? 'ml-20' : 'ml-64'
-      }`}>
-        {!isHome && <PageHeader pageId={paginaAtual} onHome={() => setPaginaAtual('home')} />}
+      {showDrawer && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]"
+          onClick={() => setDrawerOpen(false)}
+          aria-hidden="true"
+        />
+      )}
 
-        <div className={isHome ? 'pt-10 sm:pt-14' : 'pt-6'}>
+      {/* Conteúdo principal com margem adaptativa de acordo com a barra lateral */}
+      <main className={`flex-1 min-w-0 px-3 sm:px-6 md:px-8 pb-10 transition-[margin] duration-300 w-full ${
+        isCompact ? 'ml-0' : isCollapsed ? 'ml-20' : 'ml-64'
+      }`}>
+        {(!isHome || isCompact) && (
+          <PageHeader
+            pageId={paginaAtual}
+            onHome={() => navigate('home')}
+            isCompact={isCompact}
+            onMenu={() => setDrawerOpen(true)}
+          />
+        )}
+
+        <div className={isHome ? (isCompact ? 'pt-5' : 'pt-10 sm:pt-14') : 'pt-4 sm:pt-6'}>
           {isHome ? (
-            <Home onNavigate={setPaginaAtual} operatorName={operatorName} />
+            <Home onNavigate={navigate} operatorName={operatorName} />
           ) : PageComponent ? (
             <PageComponent operatorName={operatorName} />
           ) : (
@@ -164,6 +208,23 @@ function AppContent() {
           )}
         </div>
       </main>
+
+      {/* Nova versão do app pronta (PWA): o operador decide quando atualizar */}
+      {updateReady && (
+        <div
+          role="status"
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 glass border border-[color:var(--hairline)] shadow-lg rounded-full pl-4 pr-2 py-2 flex items-center gap-3 max-w-[calc(100vw-1.5rem)]"
+        >
+          <span className="text-[13px] font-medium text-[color:var(--text)]">Nova versão disponível</span>
+          <button
+            type="button"
+            onClick={applyUpdate}
+            className="h-8 px-3.5 rounded-full bg-[color:var(--accent)] text-white text-xs font-semibold cursor-pointer active:scale-95"
+          >
+            Atualizar
+          </button>
+        </div>
+      )}
 
       {/* Modal de identificação de operador no primeiro acesso ou edição */}
       <OperatorModal

@@ -9,9 +9,37 @@ import {
 
 const changelogData = [
   {
+    version: '2.3',
+    releaseDate: '11 de Novembro de 2026',
+    isLatest: true,
+    highlight: 'Aplicativo instalável (PWA), layout adaptado a janelas bem estreitas e Scripts de Chat compartilhados entre os operadores.',
+    changes: [
+      {
+        type: 'novo',
+        title: 'Aplicativo instalável (PWA)',
+        description: 'O sistema pode ser instalado como aplicativo e abre em janela própria, sem a barra do navegador, com ícone no mesmo estilo do menu e atalhos para OS Geral, Scripts de Chat e Atualizar Rota. Sem internet, abre a última versão carregada. Quando sai uma versão nova, aparece o aviso "Nova versão disponível" para atualizar quando o operador quiser.'
+      },
+      {
+        type: 'novo',
+        title: 'Layout para janela estreita',
+        description: 'Em janelas com menos de 1024 px de largura o menu lateral vira uma gaveta (botão ☰ no topo), e em janelas muito estreitas os cartões da Início viram linhas e os formulários usam menos espaço, permitindo deixar o sistema recolhido no canto da tela dividindo espaço com o navegador.'
+      },
+      {
+        type: 'novo',
+        title: 'Scripts de Chat compartilhados',
+        description: 'Os scripts agora são salvos no sistema (e não mais só no navegador). Ao criar ou editar, o operador escolhe se o script é "Só eu" ou "Todos". Novos filtros: Todos, Meus scripts e Globais. A identificação é feita pelo nome do operador, sem login. Os scripts antigos salvos no navegador podem ser importados para "Meus scripts".'
+      },
+      {
+        type: 'melhoria',
+        title: 'Salvar como meu',
+        description: 'Em qualquer script (padrão ou de outro operador) é possível ajustar o texto e salvar uma cópia privada em "Meus scripts". Apenas o autor edita, altera a visibilidade ou exclui seus scripts.'
+      }
+    ]
+  },
+  {
     version: '2.1.1',
     releaseDate: '10 de Novembro de 2026',
-    isLatest: true,
+    isLatest: false,
     highlight: 'Observação movida para dentro da seção de detalhes de cada O.S. e remoção do "Colar e preencher".',
     changes: [
       {

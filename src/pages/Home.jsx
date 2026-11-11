@@ -4,6 +4,7 @@ import { ArrowUpRight, Search, X, UploadCloud, ChevronRight } from 'lucide-react
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { PAGES, SECTIONS } from '../lib/navConfig';
+import { useMediaQuery } from '../lib/useMediaQuery';
 
 // Cores dos ícones dos cartões [início, fim] do degradê
 const TONES = {
@@ -62,6 +63,7 @@ function IconTile({ page, size = 48 }) {
 
 function PageCard({ page, onNavigate }) {
   const [from] = TONES[page.tone] || TONES.slate;
+  const narrow = useMediaQuery('(max-width: 639px)'); // janela bem estreita: cartão em linha
   return (
     <motion.button
       type="button"
@@ -69,8 +71,8 @@ function PageCard({ page, onNavigate }) {
       whileHover={{ y: -4 }}
       whileTap={{ scale: 0.985 }}
       onClick={() => onNavigate(page.id)}
-      className={`group relative overflow-hidden text-left rounded-3xl border border-[color:var(--hairline)] bg-[color:var(--surface)] p-5 cursor-pointer flex flex-col shadow-[var(--card-shadow)] hover:shadow-[var(--card-shadow-hover)] transition-shadow duration-300 ${
-        page.featured ? 'sm:col-span-2 min-h-[11rem]' : 'min-h-[11rem]'
+      className={`group relative overflow-hidden text-left rounded-2xl sm:rounded-3xl border border-[color:var(--hairline)] bg-[color:var(--surface)] p-3.5 sm:p-5 cursor-pointer flex flex-row items-center gap-3 sm:flex-col sm:items-stretch sm:gap-0 shadow-[var(--card-shadow)] hover:shadow-[var(--card-shadow-hover)] transition-shadow duration-300 ${
+        page.featured ? 'sm:col-span-2 sm:min-h-[11rem]' : 'sm:min-h-[11rem]'
       }`}
     >
       {/* brilho suave na cor do cartão */}
@@ -81,28 +83,28 @@ function PageCard({ page, onNavigate }) {
       />
 
       <div className="relative flex items-start justify-between">
-        <IconTile page={page} size={page.featured ? 56 : 48} />
+        <IconTile page={page} size={narrow ? 40 : page.featured ? 56 : 48} />
         {page.badge && (
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[color:var(--accent-soft)] text-[color:var(--accent)]">
+          <span className="hidden sm:inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-[color:var(--accent-soft)] text-[color:var(--accent)]">
             {page.badge}
           </span>
         )}
       </div>
 
-      <div className="relative mt-4 flex-1">
-        <h3 className={`font-semibold tracking-tight text-[color:var(--text)] ${page.featured ? 'text-xl' : 'text-[17px]'}`}>
+      <div className="relative mt-0 sm:mt-4 flex-1 min-w-0">
+        <h3 className={`font-semibold tracking-tight text-[color:var(--text)] ${page.featured ? 'text-base sm:text-xl' : 'text-[15px] sm:text-[17px]'}`}>
           {page.name}
         </h3>
-        <p className={`mt-1 text-[color:var(--text-2)] leading-snug ${page.featured ? 'text-sm max-w-md' : 'text-[13px]'}`}>
+        <p className={`mt-0.5 sm:mt-1 text-[color:var(--text-2)] leading-snug line-clamp-2 sm:line-clamp-none ${page.featured ? 'text-[13px] sm:text-sm max-w-md' : 'text-xs sm:text-[13px]'}`}>
           {page.description}
         </p>
       </div>
 
-      <div className="relative mt-4 flex items-center justify-between">
+      <div className="relative mt-0 sm:mt-4 flex items-center justify-between shrink-0">
         {page.shortcut ? (
-          <kbd className="text-[11px] font-medium text-[color:var(--text-3)] font-sans">Alt + {page.shortcut}</kbd>
-        ) : <span />}
-        <span className="w-8 h-8 rounded-full bg-[color:var(--surface-2)] text-[color:var(--text-2)] flex items-center justify-center group-hover:bg-[color:var(--accent)] group-hover:text-white transition-colors duration-300">
+          <kbd className="hidden sm:block text-[11px] font-medium text-[color:var(--text-3)] font-sans">Alt + {page.shortcut}</kbd>
+        ) : <span className="hidden sm:block" />}
+        <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[color:var(--surface-2)] text-[color:var(--text-2)] flex items-center justify-center group-hover:bg-[color:var(--accent)] group-hover:text-white transition-colors duration-300">
           <ArrowUpRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
         </span>
       </div>
@@ -182,15 +184,15 @@ export function Home({ onNavigate, operatorName }) {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-        className="pt-2 pb-8"
+        className="pt-0 sm:pt-2 pb-5 sm:pb-8"
       >
         <p className="text-sm font-medium text-[color:var(--text-3)]">{today}</p>
-        <h1 className="mt-1 text-4xl sm:text-5xl font-bold tracking-tight text-[color:var(--text)] leading-[1.05]">
+        <h1 className="mt-1 text-3xl sm:text-5xl font-bold tracking-tight text-[color:var(--text)] leading-[1.05]">
           {greeting()}{firstName ? `, ${firstName}` : ''}.
         </h1>
-        <p className="mt-3 text-lg sm:text-xl text-[color:var(--text-2)]">O que você vai fazer agora?</p>
+        <p className="mt-2 sm:mt-3 text-base sm:text-xl text-[color:var(--text-2)]">O que você vai fazer agora?</p>
 
-        <div className="mt-6 flex flex-col xl:flex-row xl:items-center gap-3">
+        <div className="mt-4 sm:mt-6 flex flex-col xl:flex-row xl:items-center gap-2 sm:gap-3">
           {/* BUSCA */}
           <div className="relative w-full xl:max-w-md shrink-0">
             <Search size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-[color:var(--text-3)] pointer-events-none" />
@@ -261,14 +263,14 @@ export function Home({ onNavigate, operatorName }) {
           )}
         </section>
       ) : (
-        <div className="space-y-12">
+        <div className="space-y-7 sm:space-y-12">
           {SECTIONS.filter((s) => s.id !== 'principal').map((section) => {
             const pages = visible.filter((p) => p.section === section.id);
             if (!pages.length) return null;
             return (
               <section key={section.id} aria-labelledby={`sec-${section.id}`}>
                 <div className="mb-4 flex items-baseline justify-between gap-3">
-                  <h2 id={`sec-${section.id}`} className="text-2xl font-semibold tracking-tight text-[color:var(--text)]">
+                  <h2 id={`sec-${section.id}`} className="text-xl sm:text-2xl font-semibold tracking-tight text-[color:var(--text)]">
                     {section.title}
                   </h2>
                   {section.subtitle && (
@@ -279,7 +281,7 @@ export function Home({ onNavigate, operatorName }) {
                   variants={container}
                   initial="hidden"
                   animate="show"
-                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4"
                 >
                   {pages.map((p) => <PageCard key={p.id} page={p} onNavigate={onNavigate} />)}
                 </motion.div>
@@ -290,7 +292,7 @@ export function Home({ onNavigate, operatorName }) {
       )}
 
       {/* DICAS DE ATALHO */}
-      <footer className="mt-14 pt-6 border-t border-[color:var(--hairline)] flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-[color:var(--text-3)]">
+      <footer className="hidden sm:flex mt-14 pt-6 border-t border-[color:var(--hairline)] flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-[color:var(--text-3)]">
         <span><kbd className="font-sans font-semibold text-[color:var(--text-2)]">Ctrl + Enter</kbd> copia o script</span>
         <span><kbd className="font-sans font-semibold text-[color:var(--text-2)]">Ctrl + Shift + L</kbd> limpa o formulário</span>
         <span><kbd className="font-sans font-semibold text-[color:var(--text-2)]">Alt + 1…0</kbd> troca de tela</span>

@@ -563,11 +563,11 @@ export function ScriptsChat({ operatorName }) {
             <MessagesSquare className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base sm:text-xl font-black text-slate-800 tracking-tight">
                 Scripts de Chat para Atendimento
               </h2>
-              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-600/15 text-red-600 border border-red-500/30">
+              <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-600/15 text-red-600 border border-red-500/30">
                 {filteredScripts.length} {filteredScripts.length === 1 ? 'Script' : 'Scripts'}
               </span>
             </div>
@@ -649,7 +649,7 @@ export function ScriptsChat({ operatorName }) {
 
         {/* Visibilidade: todos / meus / globais */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div role="tablist" aria-label="Filtrar por autoria" className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+          <div role="tablist" aria-label="Filtrar por autoria" className="flex w-full sm:inline-flex sm:w-auto items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
             {VISIBILITY_FILTERS.map((f) => {
               const active = visibility === f.key;
               return (
@@ -659,7 +659,7 @@ export function ScriptsChat({ operatorName }) {
                   role="tab"
                   aria-selected={active}
                   onClick={() => setVisibility(f.key)}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  className={`px-2 sm:px-3.5 py-1.5 flex-1 sm:flex-none justify-center whitespace-nowrap rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5 ${
                     active ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >

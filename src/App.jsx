@@ -158,7 +158,7 @@ function AppContent() {
           {isHome ? (
             <Home onNavigate={setPaginaAtual} operatorName={operatorName} />
           ) : PageComponent ? (
-            <PageComponent />
+            <PageComponent operatorName={operatorName} />
           ) : (
             <div className="text-[color:var(--text-2)]">Página em construção...</div>
           )}

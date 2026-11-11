@@ -1,17 +1,37 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  MessagesSquare, 
-  Search, 
-  PlusCircle, 
-  RotateCcw, 
-  Copy, 
-  Check, 
-  Trash2, 
-  Save, 
-  X, 
-  MessageSquare
+import {
+  MessagesSquare,
+  Search,
+  PlusCircle,
+  Copy,
+  Check,
+  Trash2,
+  Save,
+  X,
+  MessageSquare,
+  Lock,
+  Globe,
+  Pencil,
+  Download
 } from 'lucide-react';
+import {
+  collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc,
+  doc, serverTimestamp, writeBatch
+} from 'firebase/firestore';
+import { db } from '../lib/firebase';
+
+// Scripts de Chat compartilhados via Firestore (coleção "chatScripts").
+// Não há login: a "autoria" é o nome do operador registrado na plataforma.
+// Privado = só aparece para o mesmo nome de operador; Global = aparece para todos.
+const COL = 'chatScripts';
+const LEGACY_KEY = 'serviceDesk_scripts_chat';
+const MIGRATED_KEY = 'serviceDesk_scripts_chat_migrated';
+const VIS_KEY = 'serviceDesk_scripts_visibility';
+
+// "  João  Silva " -> "joao silva" (compara nomes sem diferenciar acento/caixa/espaços)
+const normalizeName = (name) =>
+  String(name || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
 
 const DEFAULT_SCRIPTS = [
   {
@@ -122,69 +142,189 @@ const CATEGORIAS_CONFIG = [
   { key: 'ATENDIMENTO_GERAL', label: '💬 Atendimento Geral' },
 ];
 
-export function ScriptsChat() {
-  const [scripts, setScripts] = useState(() => {
-    const saved = localStorage.getItem('serviceDesk_scripts_chat');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch (e) {
-        console.warn('Erro ao carregar scripts salvos', e);
-      }
-    }
-    return DEFAULT_SCRIPTS;
-  });
+const VISIBILITY_FILTERS = [
+  { key: 'todos', label: 'Todos' },
+  { key: 'meus', label: 'Meus scripts' },
+  { key: 'globais', label: 'Globais' },
+];
+
+const mapDoc = (d) => {
+  const data = d.data({ serverTimestamps: 'estimate' });
+  return {
+    id: d.id,
+    source: 'firestore',
+    ...data,
+    updatedMs: data.atualizadoEm?.toMillis?.() ?? 0,
+  };
+};
+
+const readLegacyScripts = () => {
+  try {
+    if (localStorage.getItem(MIGRATED_KEY)) return [];
+    const parsed = JSON.parse(localStorage.getItem(LEGACY_KEY) || '[]');
+    if (!Array.isArray(parsed)) return [];
+    const defaultsById = Object.fromEntries(DEFAULT_SCRIPTS.map((s) => [s.id, s]));
+    // só o que o operador criou ou alterou neste navegador
+    return parsed.filter((s) => {
+      if (!s || !s.titulo || !s.texto) return false;
+      const base = defaultsById[s.id];
+      return !base || base.texto !== s.texto || base.titulo !== s.titulo;
+    });
+  } catch {
+    return [];
+  }
+};
+
+export function ScriptsChat({ operatorName }) {
+  const myName = (operatorName || '').trim();
+  const myKey = normalizeName(myName);
+
+  const [globalDocs, setGlobalDocs] = useState([]);
+  const [mineDocs, setMineDocs] = useState([]);
+  const [loadError, setLoadError] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('TODAS');
+  const [visibility, setVisibility] = useState(() => {
+    try {
+      const v = localStorage.getItem(VIS_KEY);
+      return VISIBILITY_FILTERS.some((f) => f.key === v) ? v : 'todos';
+    } catch {
+      return 'todos';
+    }
+  });
+
+  const [drafts, setDrafts] = useState({}); // edições ainda não salvas, por id
   const [copiedId, setCopiedId] = useState(null);
   const [savedId, setSavedId] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState(null);
 
-  // Form para novo script customizado
+  // Modal criar/editar
+  const [modal, setModal] = useState(null); // { editingId } | null
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState('ATENDIMENTO_GERAL');
   const [newText, setNewText] = useState('');
+  const [newVisibility, setNewVisibility] = useState('privado');
+
+  // Migração dos scripts que estavam só no navegador
+  const [legacyItems, setLegacyItems] = useState(() => readLegacyScripts());
+
+  // Scripts globais de todos
+  useEffect(() => {
+    const q = query(collection(db, COL), where('visibilidade', '==', 'global'));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setGlobalDocs(snap.docs.map(mapDoc));
+        setLoading(false);
+        setLoadError(false);
+      },
+      (err) => {
+        console.error('Erro ao carregar scripts globais:', err);
+        setLoadError(true);
+        setLoading(false);
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  // Scripts do operador atual (privados e globais dele). Não baixa os privados dos outros.
+  useEffect(() => {
+    if (!myKey) return undefined;
+    const q = query(collection(db, COL), where('autorKey', '==', myKey));
+    const unsub = onSnapshot(
+      q,
+      (snap) => setMineDocs(snap.docs.map(mapDoc)),
+      (err) => {
+        console.error('Erro ao carregar seus scripts:', err);
+        setLoadError(true);
+      }
+    );
+    return () => {
+      unsub();
+      setMineDocs([]);
+    };
+  }, [myKey]);
 
   useEffect(() => {
-    localStorage.setItem('serviceDesk_scripts_chat', JSON.stringify(scripts));
-  }, [scripts]);
+    try {
+      localStorage.setItem(VIS_KEY, visibility);
+    } catch {
+      /* storage indisponível */
+    }
+  }, [visibility]);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
 
+  const isOwn = (s) => s.source === 'firestore' && !!myKey && s.autorKey === myKey;
+
+  // Lista única: scripts do Firestore (globais + meus) e depois os padrões do sistema
+  const allScripts = useMemo(() => {
+    const byId = new Map();
+    [...globalDocs, ...mineDocs].forEach((s) => byId.set(s.id, s));
+    const fromDb = [...byId.values()].sort((a, b) => b.updatedMs - a.updatedMs);
+    const defaults = DEFAULT_SCRIPTS.map((s) => ({ ...s, source: 'default', visibilidade: 'global' }));
+    return [...fromDb, ...defaults];
+  }, [globalDocs, mineDocs]);
+
+  const matchesVisibility = (s, v) => {
+    if (v === 'meus') return isOwn(s);
+    if (v === 'globais') return s.visibilidade === 'global';
+    return true;
+  };
+
+  const counts = useMemo(() => ({
+    todos: allScripts.length,
+    meus: allScripts.filter((s) => s.source === 'firestore' && !!myKey && s.autorKey === myKey).length,
+    globais: allScripts.filter((s) => s.visibilidade === 'global').length,
+  }), [allScripts, myKey]);
+
+  const filteredScripts = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return allScripts.filter((item) => {
+      const matchVis = matchesVisibility(item, visibility);
+      const matchCat = selectedCategory === 'TODAS' || item.categoria === selectedCategory;
+      const matchQuery = !q || item.titulo.toLowerCase().includes(q) || item.texto.toLowerCase().includes(q);
+      return matchVis && matchCat && matchQuery;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allScripts, searchQuery, selectedCategory, visibility, myKey]);
+
   const getCategoriaStyle = (catKey) => {
-    switch(catKey) {
-      case 'SEM_ACESSO': 
+    switch (catKey) {
+      case 'SEM_ACESSO':
         return { label: '🔴 Sem Acesso', badge: 'bg-red-50 text-red-700 border-red-200' };
-      case 'LENTIDAO': 
+      case 'LENTIDAO':
         return { label: '🟡 Instabilidade', badge: 'bg-amber-50 text-amber-700 border-amber-200' };
-      case 'MUDANCA_COMODO': 
+      case 'MUDANCA_COMODO':
         return { label: '🏠 Cômodo', badge: 'bg-slate-100 text-slate-700 border-slate-300' };
-      case 'MUDANCA_ENDERECO': 
+      case 'MUDANCA_ENDERECO':
         return { label: '📍 Endereço', badge: 'bg-slate-200 text-slate-800 border-slate-300' };
-      case 'PONTO_ADICIONAL': 
+      case 'PONTO_ADICIONAL':
         return { label: '➕ Ponto Extra', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
-      default: 
+      default:
         return { label: '💬 Atendimento', badge: 'bg-slate-100 text-slate-700 border-slate-300' };
     }
   };
 
-  const filteredScripts = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    return scripts.filter(item => {
-      const matchCat = (selectedCategory === 'TODAS' || item.categoria === selectedCategory);
-      const matchQuery = !q || 
-        item.titulo.toLowerCase().includes(q) || 
-        item.texto.toLowerCase().includes(q);
-      return matchCat && matchQuery;
-    });
-  }, [scripts, searchQuery, selectedCategory]);
+  const getOwnerBadge = (s) => {
+    if (s.source === 'default') return { text: 'Padrão', cls: 'bg-slate-100 text-slate-600 border-slate-300', icon: null };
+    if (s.visibilidade === 'privado') return { text: 'Só eu', cls: 'bg-amber-50 text-amber-700 border-amber-200', icon: Lock };
+    return {
+      text: isOwn(s) ? 'Global · meu' : `Global · ${s.autor || 'equipe'}`,
+      cls: 'bg-blue-50 text-blue-700 border-blue-200',
+      icon: Globe,
+    };
+  };
 
+  const textOf = (s) => (s.id in drafts ? drafts[s.id] : s.texto);
+
+  // ---------- ações ----------
   const handleCopyScript = async (id, text) => {
     if (!text) return;
     let ok = false;
@@ -222,49 +362,174 @@ export function ScriptsChat() {
     }
   };
 
-  const handleUpdateText = (id, newTextVal) => {
-    setScripts(prev => prev.map(s => s.id === id ? { ...s, texto: newTextVal } : s));
+  const requireName = () => {
+    if (myKey) return true;
+    showToast('Defina seu nome de operador (menu lateral) para salvar scripts.', 'error');
+    return false;
   };
 
-  const handleSaveCard = (id) => {
-    setSavedId(id);
-    showToast('Alteração salva no sistema local!');
-    setTimeout(() => setSavedId(null), 1800);
-  };
-
-  const handleDeleteScript = (id) => {
-    setScripts(prev => prev.filter(s => s.id !== id));
-    showToast('Script removido da biblioteca.');
-  };
-
-  const handleRestoreDefaults = () => {
-    if (window.confirm('Deseja restaurar os scripts padrão de fábrica?')) {
-      setScripts(DEFAULT_SCRIPTS);
-      showToast('Scripts de fábrica restaurados com sucesso!');
+  const handleSaveCard = async (script) => {
+    if (!requireName()) return;
+    const texto = textOf(script).trim();
+    if (!texto) {
+      showToast('O texto do script não pode ficar vazio.', 'error');
+      return;
+    }
+    setBusy(true);
+    try {
+      if (isOwn(script)) {
+        await updateDoc(doc(db, COL, script.id), { texto, atualizadoEm: serverTimestamp() });
+        showToast('Alteração salva!');
+      } else {
+        // Padrão/de outro operador: salva uma cópia privada com o texto editado
+        await addDoc(collection(db, COL), {
+          titulo: script.titulo,
+          categoria: script.categoria,
+          texto,
+          visibilidade: 'privado',
+          autor: myName,
+          autorKey: myKey,
+          criadoEm: serverTimestamp(),
+          atualizadoEm: serverTimestamp(),
+        });
+        showToast('Cópia salva em "Meus scripts" (só você vê).');
+      }
+      setDrafts((prev) => {
+        const next = { ...prev };
+        delete next[script.id];
+        return next;
+      });
+      setSavedId(script.id);
+      setTimeout(() => setSavedId(null), 1800);
+    } catch (err) {
+      console.error(err);
+      showToast('Não foi possível salvar. Verifique a conexão.', 'error');
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleCreateCustomScript = (e) => {
+  const handleToggleVisibility = async (script) => {
+    if (!isOwn(script)) return;
+    const next = script.visibilidade === 'global' ? 'privado' : 'global';
+    try {
+      await updateDoc(doc(db, COL, script.id), { visibilidade: next, atualizadoEm: serverTimestamp() });
+      showToast(next === 'global' ? 'Script disponível para todos.' : 'Script agora é só seu.');
+    } catch (err) {
+      console.error(err);
+      showToast('Não foi possível alterar a visibilidade.', 'error');
+    }
+  };
+
+  const handleDeleteScript = async (script) => {
+    if (!isOwn(script)) return;
+    if (!window.confirm(`Excluir o script "${script.titulo}"?${script.visibilidade === 'global' ? '\nEle some para todos os operadores.' : ''}`)) return;
+    try {
+      await deleteDoc(doc(db, COL, script.id));
+      showToast('Script removido.');
+    } catch (err) {
+      console.error(err);
+      showToast('Não foi possível excluir o script.', 'error');
+    }
+  };
+
+  const openCreateModal = () => {
+    if (!requireName()) return;
+    setNewTitle('');
+    setNewCategory('ATENDIMENTO_GERAL');
+    setNewText('');
+    setNewVisibility('privado');
+    setModal({ editingId: null });
+  };
+
+  const openEditModal = (script) => {
+    if (!isOwn(script)) return;
+    setNewTitle(script.titulo);
+    setNewCategory(script.categoria);
+    setNewText(textOf(script));
+    setNewVisibility(script.visibilidade === 'global' ? 'global' : 'privado');
+    setModal({ editingId: script.id });
+  };
+
+  const handleSubmitModal = async (e) => {
     e.preventDefault();
+    if (!requireName()) return;
     if (!newTitle.trim() || !newText.trim()) {
       showToast('Preencha o título e o texto da mensagem.', 'error');
       return;
     }
-
-    const newObj = {
-      id: `script-custom-${Date.now()}`,
-      categoria: newCategory,
-      titulo: newTitle.trim(),
-      texto: newText.trim()
-    };
-
-    setScripts(prev => [newObj, ...prev]);
-    setIsModalOpen(false);
-    setNewTitle('');
-    setNewText('');
-    setNewCategory('ATENDIMENTO_GERAL');
-    showToast('Novo script customizado adicionado!');
+    setBusy(true);
+    try {
+      const payload = {
+        titulo: newTitle.trim(),
+        categoria: newCategory,
+        texto: newText.trim(),
+        visibilidade: newVisibility,
+        atualizadoEm: serverTimestamp(),
+      };
+      if (modal.editingId) {
+        await updateDoc(doc(db, COL, modal.editingId), payload);
+        setDrafts((prev) => {
+          const next = { ...prev };
+          delete next[modal.editingId];
+          return next;
+        });
+        showToast('Script atualizado!');
+      } else {
+        await addDoc(collection(db, COL), {
+          ...payload,
+          autor: myName,
+          autorKey: myKey,
+          criadoEm: serverTimestamp(),
+        });
+        showToast(newVisibility === 'global' ? 'Script criado e disponível para todos!' : 'Script criado (só você vê).');
+      }
+      setModal(null);
+    } catch (err) {
+      console.error(err);
+      showToast('Não foi possível salvar. Verifique a conexão.', 'error');
+    } finally {
+      setBusy(false);
+    }
   };
+
+  const handleImportLegacy = async () => {
+    if (!requireName() || legacyItems.length === 0) return;
+    setBusy(true);
+    try {
+      const batch = writeBatch(db);
+      legacyItems.forEach((s) => {
+        batch.set(doc(collection(db, COL)), {
+          titulo: s.titulo,
+          categoria: s.categoria || 'ATENDIMENTO_GERAL',
+          texto: s.texto,
+          visibilidade: 'privado',
+          autor: myName,
+          autorKey: myKey,
+          criadoEm: serverTimestamp(),
+          atualizadoEm: serverTimestamp(),
+        });
+      });
+      await batch.commit();
+      try { localStorage.setItem(MIGRATED_KEY, '1'); } catch { /* ignora */ }
+      showToast(`${legacyItems.length} script(s) importado(s) para "Meus scripts".`);
+      setLegacyItems([]);
+    } catch (err) {
+      console.error(err);
+      showToast('Não foi possível importar. Tente novamente.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const dismissLegacy = () => {
+    try { localStorage.setItem(MIGRATED_KEY, '1'); } catch { /* ignora */ }
+    setLegacyItems([]);
+  };
+
+  const emptyMessage = visibility === 'meus'
+    ? { title: 'Você ainda não tem scripts salvos.', hint: 'Clique em "Novo script" ou use "Salvar como meu" em qualquer script para criar o seu.' }
+    : { title: 'Nenhum script encontrado para esta busca ou categoria.', hint: 'Tente ajustar o termo de pesquisa ou limpar os filtros.' };
 
   return (
     <motion.div
@@ -299,45 +564,69 @@ export function ScriptsChat() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight">
+              <h2 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight">
                 Scripts de Chat para Atendimento
-              </h1>
+              </h2>
               <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-600/15 text-red-600 border border-red-500/30">
-                {scripts.length} Prontos
+                {filteredScripts.length} {filteredScripts.length === 1 ? 'Script' : 'Scripts'}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Mensagens padronizadas e respostas rápidas para agilizar o suporte no chat com o assinante.
+              {myName
+                ? <>Salvando como <strong>{myName}</strong>. Escolha se cada script é só seu ou de todos.</>
+                : 'Defina seu nome de operador no menu lateral para salvar seus próprios scripts.'}
             </p>
           </div>
         </div>
 
-        {/* Botões de Ação do Topo */}
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
-            onClick={() => setIsModalOpen(true)}
+            onClick={openCreateModal}
             className="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all flex items-center gap-2 shadow-sm cursor-pointer active:scale-95"
           >
             <PlusCircle size={15} />
-            <span>Adicionar Script Customizado</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleRestoreDefaults}
-            title="Restaura os scripts de fábrica"
-            className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2.5 px-3 rounded-xl text-xs transition-all flex items-center gap-1.5 border border-slate-200 cursor-pointer active:scale-95"
-          >
-            <RotateCcw size={14} />
-            <span className="hidden sm:inline">Restaurar Padrões</span>
+            <span>Novo script</span>
           </button>
         </div>
       </div>
 
-      {/* BARRA DE PESQUISA E FILTROS DE CATEGORIA */}
+      {/* AVISO: scripts antigos salvos só neste navegador */}
+      {legacyItems.length > 0 && (
+        <div className="rounded-2xl border border-blue-300/60 bg-blue-500/10 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <p className="text-xs text-slate-700 leading-relaxed">
+            <strong>{legacyItems.length} script(s)</strong> criado(s) ou editado(s) estavam salvos apenas neste navegador.
+            Importe para <strong>Meus scripts</strong> (ficam privados, só você vê) para não perdê-los.
+          </p>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleImportLegacy}
+              disabled={busy || !myKey}
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold py-2 px-3.5 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <Download size={14} />
+              Importar
+            </button>
+            <button
+              type="button"
+              onClick={dismissLegacy}
+              className="bg-white hover:bg-slate-100 text-slate-700 font-semibold py-2 px-3 rounded-xl text-xs border border-slate-300 cursor-pointer"
+            >
+              Agora não
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loadError && (
+        <div className="rounded-2xl border border-red-300/60 bg-red-500/10 p-4 text-xs text-red-700">
+          Não foi possível carregar os scripts compartilhados agora. Os scripts padrão continuam disponíveis; tente recarregar a página.
+        </div>
+      )}
+
+      {/* BARRA DE PESQUISA E FILTROS */}
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/90 space-y-4">
-        {/* Campo de Pesquisa por Palavra-Chave */}
         <div className="relative">
           <Search size={16} className="text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
@@ -358,9 +647,36 @@ export function ScriptsChat() {
           )}
         </div>
 
+        {/* Visibilidade: todos / meus / globais */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div role="tablist" aria-label="Filtrar por autoria" className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+            {VISIBILITY_FILTERS.map((f) => {
+              const active = visibility === f.key;
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setVisibility(f.key)}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    active ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {f.key === 'meus' && <Lock size={12} />}
+                  {f.key === 'globais' && <Globe size={12} />}
+                  {f.label}
+                  <span className="text-[10px] font-extrabold text-slate-400">{counts[f.key]}</span>
+                </button>
+              );
+            })}
+          </div>
+          {loading && <span className="text-[11px] text-slate-400">Carregando scripts compartilhados…</span>}
+        </div>
+
         {/* Chips de Categorias */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs select-none">
-          {CATEGORIAS_CONFIG.map(cat => {
+          {CATEGORIAS_CONFIG.map((cat) => {
             const isSelected = selectedCategory === cat.key;
             return (
               <button
@@ -384,15 +700,19 @@ export function ScriptsChat() {
       {filteredScripts.length === 0 ? (
         <div className="text-center py-14 bg-white rounded-2xl border border-dashed border-slate-300 p-6 space-y-2">
           <MessageSquare className="w-8 h-8 text-slate-300 mx-auto" />
-          <p className="text-sm font-bold text-slate-700">Nenhum script encontrado para esta busca ou categoria.</p>
-          <p className="text-xs text-slate-400">Tente ajustar o termo de pesquisa ou limpar os filtros.</p>
+          <p className="text-sm font-bold text-slate-700">{emptyMessage.title}</p>
+          <p className="text-xs text-slate-400">{emptyMessage.hint}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredScripts.map(script => {
+          {filteredScripts.map((script) => {
             const catInfo = getCategoriaStyle(script.categoria);
+            const owner = getOwnerBadge(script);
+            const OwnerIcon = owner.icon;
+            const own = isOwn(script);
             const isCopied = copiedId === script.id;
             const isSaved = savedId === script.id;
+            const dirty = script.id in drafts && drafts[script.id] !== script.texto;
 
             return (
               <div
@@ -400,44 +720,66 @@ export function ScriptsChat() {
                 className="bg-white p-5 rounded-2xl border border-slate-200/90 hover:border-red-300 shadow-sm flex flex-col justify-between space-y-3.5 transition-all"
               >
                 <div className="space-y-2.5">
-                  {/* Topo do Card: Badge de Categoria e Ações */}
+                  {/* Topo do Card: categoria, autoria e ações do dono */}
                   <div className="flex items-center justify-between gap-2">
-                    <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-md border uppercase tracking-wider ${catInfo.badge}`}>
-                      {catInfo.label}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                      <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-md border uppercase tracking-wider ${catInfo.badge}`}>
+                        {catInfo.label}
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border inline-flex items-center gap-1 max-w-[12rem] ${owner.cls}`}>
+                        {OwnerIcon && <OwnerIcon size={10} className="shrink-0" />}
+                        <span className="truncate">{owner.text}</span>
+                      </span>
+                    </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteScript(script.id)}
-                      title="Excluir este script"
-                      className="text-slate-400 hover:text-red-600 p-1 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    {own && (
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleVisibility(script)}
+                          title={script.visibilidade === 'global' ? 'Tornar privado (só eu)' : 'Disponibilizar para todos'}
+                          className="text-slate-400 hover:text-blue-600 p-1.5 rounded-lg transition-colors cursor-pointer"
+                        >
+                          {script.visibilidade === 'global' ? <Lock size={13} /> : <Globe size={13} />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(script)}
+                          title="Editar título, categoria e visibilidade"
+                          className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteScript(script)}
+                          title="Excluir este script"
+                          className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Título do Script */}
                   <h3 className="font-extrabold text-sm text-slate-800 leading-snug">
                     {script.titulo}
                   </h3>
 
-                  {/* Textarea editável em tempo real antes de copiar */}
-                  <div className="relative">
-                    <textarea
-                      rows="4"
-                      value={script.texto}
-                      onChange={(e) => handleUpdateText(script.id, e.target.value)}
-                      className="w-full p-3 rounded-xl border border-slate-200 text-xs text-slate-700 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 bg-slate-50/60 leading-relaxed font-sans resize-y transition-all"
-                      placeholder="Mensagem do script..."
-                    />
-                  </div>
+                  {/* Texto editável antes de copiar; só persiste ao clicar em Salvar */}
+                  <textarea
+                    rows="4"
+                    value={textOf(script)}
+                    onChange={(e) => setDrafts((prev) => ({ ...prev, [script.id]: e.target.value }))}
+                    className="w-full p-3 rounded-xl border border-slate-200 text-xs text-slate-700 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 bg-slate-50/60 leading-relaxed font-sans resize-y transition-all"
+                    placeholder="Mensagem do script..."
+                  />
                 </div>
 
-                {/* Rodapé do Card: Copiar e Salvar */}
                 <div className="flex items-center justify-between pt-1 border-t border-slate-100 gap-2">
                   <button
                     type="button"
-                    onClick={() => handleCopyScript(script.id, script.texto)}
+                    onClick={() => handleCopyScript(script.id, textOf(script))}
                     className={`flex-1 font-bold py-2.5 px-3 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 ${
                       isCopied
                         ? 'bg-emerald-600 text-white ring-1 ring-emerald-400'
@@ -448,18 +790,20 @@ export function ScriptsChat() {
                     <span>{isCopied ? 'Script Copiado!' : 'Copiar Script'}</span>
                   </button>
 
+                  {/* Dono: salva o texto editado. Outros/padrão: salva uma cópia privada */}
                   <button
                     type="button"
-                    onClick={() => handleSaveCard(script.id)}
-                    title="Salvar alterações no texto deste card"
-                    className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1 border cursor-pointer active:scale-95 ${
-                      isSaved 
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300' 
+                    onClick={() => handleSaveCard(script)}
+                    disabled={busy || (own && !dirty)}
+                    title={own ? 'Salvar alterações no texto deste script' : 'Salva uma cópia em "Meus scripts" (só você vê)'}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1 border cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      isSaved
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
                         : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
                     }`}
                   >
                     {isSaved ? <Check size={13} className="text-emerald-600" /> : <Save size={13} className="text-slate-500" />}
-                    <span>{isSaved ? 'Salvo' : 'Salvar'}</span>
+                    <span>{isSaved ? 'Salvo' : own ? 'Salvar' : 'Salvar como meu'}</span>
                   </button>
                 </div>
               </div>
@@ -468,9 +812,9 @@ export function ScriptsChat() {
         </div>
       )}
 
-      {/* MODAL: NOVO SCRIPT CUSTOMIZADO */}
+      {/* MODAL: NOVO / EDITAR SCRIPT */}
       <AnimatePresence>
-        {isModalOpen && (
+        {modal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -478,25 +822,24 @@ export function ScriptsChat() {
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
             >
-              {/* Header do Modal */}
               <div className="bg-slate-900 text-white px-5 py-4 flex items-center justify-between border-b border-slate-800">
                 <div className="flex items-center gap-2">
-                  <PlusCircle className="w-5 h-5 text-red-500" />
+                  {modal.editingId ? <Pencil className="w-5 h-5 text-red-500" /> : <PlusCircle className="w-5 h-5 text-red-500" />}
                   <h3 className="font-extrabold text-sm text-white">
-                    Novo Script Customizado
+                    {modal.editingId ? 'Editar script' : 'Novo script'}
                   </h3>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => setModal(null)}
+                  aria-label="Fechar"
                   className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              {/* Form do Modal */}
-              <form onSubmit={handleCreateCustomScript} className="p-5 space-y-4">
+              <form onSubmit={handleSubmitModal} className="p-5 space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Título do Script *
@@ -531,6 +874,40 @@ export function ScriptsChat() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Quem pode usar este script?
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { key: 'privado', label: 'Só eu', hint: 'Aparece apenas para o seu nome de operador', icon: Lock },
+                      { key: 'global', label: 'Todos', hint: 'Todos os operadores podem ver e copiar', icon: Globe },
+                    ].map((opt) => {
+                      const Icon = opt.icon;
+                      const selected = newVisibility === opt.key;
+                      return (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => setNewVisibility(opt.key)}
+                          className={`text-left p-3 rounded-xl border transition-all cursor-pointer ${
+                            selected
+                              ? 'border-red-500 bg-red-50 ring-1 ring-red-400'
+                              : 'border-slate-300 bg-white hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                            <Icon size={13} />
+                            {opt.label}
+                          </span>
+                          <span className="block text-[11px] text-slate-500 mt-0.5 leading-snug">{opt.hint}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Mensagem do Script *
                   </label>
                   <textarea
@@ -541,25 +918,23 @@ export function ScriptsChat() {
                     placeholder="Digite a mensagem padrão que será enviada no chat..."
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-red-500 bg-white leading-relaxed resize-y"
                   />
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Dica: Você poderá editar o texto individualmente a qualquer momento antes de copiá-lo.
-                  </p>
                 </div>
 
                 <div className="pt-3 border-t border-slate-100 flex justify-end gap-2.5">
                   <button
                     type="button"
-                    onClick={() => setIsModalOpen(false)}
+                    onClick={() => setModal(null)}
                     className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                    disabled={busy}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
                   >
-                    <PlusCircle size={14} />
-                    <span>Salvar Script</span>
+                    <Save size={14} />
+                    <span>{modal.editingId ? 'Salvar alterações' : 'Salvar script'}</span>
                   </button>
                 </div>
               </form>

@@ -133,25 +133,35 @@ function withTimeout<T>(p: Promise<T>, ms: number, controller: AbortController):
 }
 
 // ---------- prompt e schema ----------
-const PROMPT = `Analise detalhadamente esta imagem de uma escala/tabela de técnicos.
-Extraia todos os técnicos organizados em duas listas: MOTO e CARRO.
-Para cada técnico identificado, extraia:
-- name: Nome completo ou identificação do técnico
-- region: Região, setor ou rota atendida
-- city: Cidade ou localidade
-- obs: Observações (horário, restrições, disponibilidade, telefone, avisos adicionais)
+const PROMPT = `Você vai ler a imagem de uma escala de técnicos de campo. Ela costuma ter duas tabelas: "TÉCNICOS DE MOTO" e "TÉCNICOS DE CARRO".
+Cada tabela tem colunas como: Técnico | Região de atendimento | Cidade | Observações.
 
-Retorne EXCLUSIVAMENTE o JSON no formato do schema. Se uma categoria não tiver técnicos, retorne o array vazio [].`;
+Para CADA linha (cada técnico) da tabela, extraia os 4 campos, lendo cada coluna pelo título do cabeçalho:
+- name: o que está na coluna "Técnico" (nome ou identificação).
+- region: o que está na coluna "Região de atendimento" (bairros/setores). Mantenha o texto completo, por exemplo "Todas as regiões" ou a lista de bairros separados por " · ".
+- city: o que está na coluna "Cidade" (ex.: Peruíbe, Itanhaém, Mongaguá, Praia Grande). TODA linha que tem uma cidade escrita na tabela deve vir com city preenchido; nunca deixe city vazio se a coluna "Cidade" tem valor naquela linha.
+- obs: o que está na coluna "Observações" (ex.: NOTURNO, avisos). Se a célula estiver vazia, use "".
+
+Regras:
+- Inclua todos os técnicos de cada tabela, na ordem em que aparecem, sem pular linhas.
+- Técnicos da tabela de MOTO vão em "moto"; os da tabela de CARRO vão em "car".
+- Copie os textos exatamente como estão escritos, sem inventar, traduzir ou resumir.
+- Use "" (string vazia) apenas quando a célula realmente estiver vazia na imagem.
+- Se uma tabela não existir, retorne o array vazio [] para ela.
+
+Retorne EXCLUSIVAMENTE o JSON no formato do schema.`;
 
 const techItem = {
   type: Type.OBJECT,
   properties: {
-    name: { type: Type.STRING },
-    region: { type: Type.STRING },
-    city: { type: Type.STRING },
-    obs: { type: Type.STRING },
+    name: { type: Type.STRING, description: 'Coluna "Técnico"' },
+    region: { type: Type.STRING, description: 'Coluna "Região de atendimento"' },
+    city: { type: Type.STRING, description: 'Coluna "Cidade" (obrigatória quando houver valor na linha)' },
+    obs: { type: Type.STRING, description: 'Coluna "Observações" ("" se vazia)' },
   },
-  required: ["name"],
+  // todos obrigatórios: com só "name" obrigatório o modelo costumava omitir cidade/região
+  required: ["name", "region", "city", "obs"],
+  propertyOrdering: ["name", "region", "city", "obs"],
 };
 
 const RESPONSE_SCHEMA = {
@@ -214,6 +224,15 @@ type Handle = (text: string) => any; // lança se inválido (kind invalid-output
 
 class EmptyResult extends Error {}
 
+/** Leitura que veio completa em nomes, mas sem nenhuma cidade (provável falha de leitura da coluna). */
+class WeakResult<T> extends Error {
+  data: T;
+  constructor(data: T) {
+    super("Cidades não foram extraídas");
+    this.data = data;
+  }
+}
+
 async function runChain<T>(call: CallFn, handle: (text: string) => T): Promise<{
   value: T;
   model: string;
@@ -237,6 +256,7 @@ async function runChain<T>(call: CallFn, handle: (text: string) => T): Promise<{
   const deadline = started + TOTAL_BUDGET_MS;
   let sawEmpty = false;
   let sawNonAuthError = false;
+  let weak: { value: T; model: string; count: number } | null = null;
 
   for (let keyIdx = 0; keyIdx < keys.length; keyIdx++) {
     const ai = new GoogleGenAI({ apiKey: keys[keyIdx] });
@@ -271,7 +291,7 @@ async function runChain<T>(call: CallFn, handle: (text: string) => T): Promise<{
           try {
             value = handle(text);
           } catch (e: any) {
-            if (e instanceof EmptyResult) throw e;
+            if (e instanceof EmptyResult || e instanceof WeakResult) throw e;
             throw Object.assign(new Error(e?.message || "Saída inválida"), { invalid: true });
           }
 
@@ -281,6 +301,15 @@ async function runChain<T>(call: CallFn, handle: (text: string) => T): Promise<{
         } catch (e: any) {
           const ms = Date.now() - t0;
 
+          if (e instanceof WeakResult) {
+            // guarda a leitura incompleta e tenta outro modelo; na 2ª vez devolve a melhor que tiver
+            weak = { value: e.data as T, model, count: (weak?.count ?? 0) + 1 };
+            attempts.push({ model, keyIdx, ok: false, kind: "invalid-output", ms, error: e.message });
+            if (weak.count >= 2) {
+              return { value: weak.value, model, attempts, latencyMs: Date.now() - started };
+            }
+            break; // próximo modelo
+          }
           if (e instanceof EmptyResult) {
             sawEmpty = true;
             attempts.push({ model, keyIdx, ok: false, kind: "empty", ms, error: "Nenhum técnico encontrado" });
@@ -324,6 +353,11 @@ async function runChain<T>(call: CallFn, handle: (text: string) => T): Promise<{
     }
   }
 
+  // todos os modelos falharam, mas houve uma leitura (mesmo sem cidades): melhor que nada
+  if (weak) {
+    return { value: weak.value, model: weak.model, attempts, latencyMs: Date.now() - started };
+  }
+
   if (sawEmpty && !sawNonAuthError) {
     throw new ExtractError(
       "empty",
@@ -363,6 +397,7 @@ export async function extractWithFailover(base64Data: string, mimeType: string) 
         config: {
           responseMimeType: "application/json",
           responseSchema: RESPONSE_SCHEMA,
+          temperature: 0, // leitura de tabela: sem criatividade
           abortSignal: signal,
         },
       });
@@ -370,7 +405,9 @@ export async function extractWithFailover(base64Data: string, mimeType: string) 
     },
     (text) => {
       const data = validateTechData(parseJson(text));
-      if (!data.moto.length && !data.car.length) throw new EmptyResult();
+      const all = [...data.moto, ...data.car];
+      if (!all.length) throw new EmptyResult();
+      if (all.length >= 3 && all.every((t) => !t.city)) throw new WeakResult(data);
       return data;
     }
   );

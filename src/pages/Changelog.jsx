@@ -9,9 +9,27 @@ import {
 
 const changelogData = [
   {
+    version: '2.3.1',
+    releaseDate: '13 de Novembro de 2026',
+    isLatest: true,
+    highlight: 'Correção da leitura de escala com IA: a cidade dos técnicos voltou a ser identificada.',
+    changes: [
+      {
+        type: 'correcao',
+        title: 'Cidade em branco na leitura da escala',
+        description: 'A IA podia deixar cidade, região e observação vazias mesmo com os dados presentes na imagem. Agora todos os campos são obrigatórios na resposta e o prompt orienta a leitura pelas colunas Técnico, Região de atendimento, Cidade e Observações.'
+      },
+      {
+        type: 'melhoria',
+        title: 'Verificação de qualidade da leitura',
+        description: 'Se a IA devolver vários técnicos sem nenhuma cidade, o sistema tenta automaticamente outro modelo antes de exibir o resultado para revisão. A leitura usa temperatura 0 para ficar mais consistente.'
+      }
+    ]
+  },
+  {
     version: '2.3',
     releaseDate: '11 de Novembro de 2026',
-    isLatest: true,
+    isLatest: false,
     highlight: 'Aplicativo instalável (PWA), layout adaptado a janelas bem estreitas e Scripts de Chat compartilhados entre os operadores.',
     changes: [
       {

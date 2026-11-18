@@ -4,7 +4,7 @@ import { ObservationField } from '../components/ObservationField';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CalendarDays, MapPin, FileCheck, PackageCheck, 
-  ShieldCheck, Copy, Trash2, AlertTriangle, Info, Check, MessageSquarePlus, User
+  ShieldCheck, Copy, Trash2, AlertTriangle, Info, Check, MessageSquarePlus, User, PlusCircle, X
 } from 'lucide-react';
 import { TechniciansRegion } from '../components/TechniciansRegion';
 import { DateInputWithCalendar } from '../components/DateInputWithCalendar';
@@ -29,11 +29,40 @@ const initialState = {
   locMaps: '',
   comprovante: '',
   pontoAdicional: '', // Desmarcado por padrão (obrigatório)
+  tipoEquipamento: '', // Comodato | Compra | Smart-Pré (obrigatório se houver ponto adicional)
   eteccResolve: '',
   authExcecao: 'Não', // Marcado como Não por padrão
   nomeAutorizou: '',
   nomeAtendente: ''
 };
+
+// Copia texto com fallback (execCommand) para contextos sem Clipboard API (ex.: http fora de localhost)
+async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (err) {
+      console.warn('Clipboard API falhou', err);
+    }
+  }
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return ok;
+  } catch (err) {
+    console.error('Fallback de cópia falhou', err);
+    return false;
+  }
+}
 
 export function MudEndereco() {
   const [formData, setFormData] = useState(() => {
@@ -66,6 +95,8 @@ export function MudEndereco() {
   const [showClearModal, setShowClearModal] = useState(false);
   const [errorFields, setErrorFields] = useState([]);
   const [copied, setCopied] = useState(false);
+  const [showPontoModal, setShowPontoModal] = useState(false);
+  const [pontoCopied, setPontoCopied] = useState(false);
 
   // Sincronização automática do operador
   useEffect(() => {
@@ -182,6 +213,7 @@ export function MudEndereco() {
       newErrors.push('nomeAtendente');
     }
 
+    if (formData.pontoAdicional === 'Sim' && !formData.tipoEquipamento) newErrors.push('tipoEquipamento');
     if (formData.periodo === 'Após' && !formData.horarioApos) newErrors.push('horarioApos');
     if (formData.authExcecao === 'Sim' && !formData.nomeAutorizou) newErrors.push('nomeAutorizou');
     if (formData.adicionarObs === 'Sim' && !formData.observacaoCliente?.trim()) newErrors.push('observacaoCliente');
@@ -190,7 +222,7 @@ export function MudEndereco() {
     return newErrors.length === 0;
   };
 
-  const copiarScript = () => {
+  const copiarScript = async () => {
     if (!validateForm()) {
       if (!formData.podeAdiantar) {
         showToast("Por favor, selecione se pode adiantar (Sim ou Não).", "error");
@@ -198,6 +230,8 @@ export function MudEndereco() {
         showToast("Por favor, selecione se conseguiu contato (Sim ou Não).", "error");
       } else if (!formData.pontoAdicional) {
         showToast("Por favor, selecione se o cliente tem ponto adicional (Sim ou Não).", "error");
+      } else if (formData.pontoAdicional === 'Sim' && !formData.tipoEquipamento) {
+        showToast("Selecione se o cliente é Comodato, Compra ou Smart-Pré.", "error");
       } else if (formData.adicionarObs === 'Sim' && !formData.observacaoCliente?.trim()) {
         showToast("Por favor, insira a observação repassada pelo cliente.", "error");
       } else {
@@ -248,10 +282,55 @@ ETECC Resolve (Mudança): ${formData.eteccResolve}
 Exceção? ${txtExcecao}
 Atendente: ${operadorFinal}`.trim();
 
-    navigator.clipboard.writeText(finalScript);
+    const ok = await copyText(finalScript);
+    if (!ok) {
+      showToast("Não foi possível copiar automaticamente. Tente novamente.", "error");
+      return;
+    }
     setCopied(true);
     showToast("Script copiado com sucesso!", "success");
     setTimeout(() => setCopied(false), 2500);
+
+    if (formData.pontoAdicional === 'Sim') {
+      setPontoCopied(false);
+      setShowPontoModal(true);
+    }
+  };
+
+  // Monta a O.S de Ponto Adicional pré-preenchida com os dados da Mudança de Endereço
+  const buildPontoAdicionalScript = () => {
+    const dataAgend = formatDate(formData.dataAgendamento);
+    const periodoFmt = formData.periodo === 'Após' ? `Após (${formData.horarioApos})` : formData.periodo;
+    const operadorFinal = formData.nomeAtendente || localStorage.getItem('serviceDesk_operador') || '';
+    const contatosFmt = formatContactsForScript(formData.contatos) || formData.contato;
+
+    let txtExcecao = `Autorização por Exceção: ${formData.authExcecao}`;
+    if (formData.authExcecao === 'Sim') txtExcecao += ` (Por: ${formData.nomeAutorizou})`;
+
+    return `${formatObservation(formData.observacao)}=== O.S PONTO ADICIONAL ===
+Data: ${dataAgend}
+Período: ${periodoFmt}
+Solicitação: Ponto adicional a ser avaliado/instalado no novo endereço (mudança de endereço): ${formData.novoEndereco} - Ref: ${formData.refNovoEndereco}
+
+=== INFORMAÇÕES DO CLIENTE ===
+Contato: ${contatosFmt} (Conseguiu contato: ${formData.conseguiuContato})
+Roteador: ${formData.tipoEquipamento}
+ONU: ${formData.tipoEquipamento}
+Cliente desde: ${formData.clienteDesde}
+
+=== AUTORIZAÇÃO / ATENDENTE ===
+${txtExcecao}
+Atendente: ${operadorFinal}`.trim();
+  };
+
+  const copiarPontoAdicional = async () => {
+    const ok = await copyText(buildPontoAdicionalScript());
+    if (ok) {
+      setPontoCopied(true);
+      showToast("O.S de Ponto Adicional copiada!", "success");
+    } else {
+      showToast("Não foi possível copiar automaticamente. Tente novamente.", "error");
+    }
   };
 
   const confirmClear = () => {
@@ -665,9 +744,47 @@ Atendente: ${operadorFinal}`.trim();
 
               <AnimatePresence>
                 {formData.pontoAdicional === 'Sim' && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm flex items-start gap-2 mt-2.5">
-                    <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
-                    <span><strong>Atenção:</strong> Notifique o cliente sobre avaliação desse ponto para a nova residência.</span>
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-3">
+                    <label className={labelClass}>Cliente é: *</label>
+                    <div className={`grid grid-cols-3 gap-1 p-1 rounded-xl border transition-all ${
+                      errorFields.includes('tipoEquipamento')
+                        ? 'border-red-500 bg-red-50 ring-1 ring-red-500 animate-error'
+                        : 'border-slate-300 bg-slate-100'
+                    }`}>
+                      {[
+                        { label: 'Comodato', active: 'bg-emerald-600 text-white shadow-sm' },
+                        { label: 'Compra', active: 'bg-blue-600 text-white shadow-sm' },
+                        { label: 'Smart-Pré', active: 'bg-red-600 text-white shadow-sm' }
+                      ].map(opt => (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({ ...prev, tipoEquipamento: opt.label }));
+                            setErrorFields(prev => prev.filter(f => f !== 'tipoEquipamento'));
+                          }}
+                          className={`py-2 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            formData.tipoEquipamento === opt.label
+                              ? opt.active
+                              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    {errorFields.includes('tipoEquipamento') && (
+                      <p className="text-red-500 text-xs mt-1 font-medium">Selecione Comodato, Compra ou Smart-Pré</p>
+                    )}
+                  </motion.div>
+                )}
+                {formData.pontoAdicional === 'Sim' && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="p-3.5 bg-amber-100 border-2 border-amber-400 rounded-lg text-amber-900 text-sm flex items-start gap-2.5 mt-2.5 shadow-md ring-2 ring-amber-300/60">
+                    <AlertTriangle size={20} className="mt-0.5 flex-shrink-0 text-amber-600 animate-pulse" />
+                    <div className="space-y-1">
+                      <p><strong className="uppercase">Atenção:</strong> Notifique o cliente sobre avaliação desse ponto para a nova residência.</p>
+                      <p className="text-xs font-semibold text-amber-800">Ao copiar esta O.S, você também será orientado a copiar a O.S de Ponto Adicional já preenchida.</p>
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -874,6 +991,56 @@ Atendente: ${operadorFinal}`.trim();
                   className="px-5 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-medium shadow-md transition cursor-pointer"
                 >
                   Sim, limpar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal: copiar O.S de Ponto Adicional */}
+      <AnimatePresence>
+        {showPontoModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-amber-500"
+            >
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex items-center gap-3 text-amber-600">
+                  <div className="p-2 bg-amber-100 rounded-full"><PlusCircle size={24} /></div>
+                  <h3 className="text-xl font-bold text-slate-800">Abra também a O.S de Ponto Adicional</h3>
+                </div>
+                <button type="button" onClick={() => setShowPontoModal(false)} aria-label="Fechar" className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                  <X size={20} />
+                </button>
+              </div>
+              <p className="text-slate-600 mb-3">
+                A O.S de Mudança de Endereço foi copiada. Como o cliente possui ponto adicional, é necessário abrir também a O.S de Ponto Adicional.
+              </p>
+              <p className="text-sm text-slate-500 mb-6 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                Ela já vai preenchida com data, período, contato, cliente desde, novo endereço, tipo de equipamento (Roteador/ONU), exceção e atendente. Ela já sai completa.
+              </p>
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowPontoModal(false)}
+                  className="px-5 py-2.5 rounded-lg text-slate-600 font-medium hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Fechar
+                </button>
+                <button
+                  type="button"
+                  onClick={copiarPontoAdicional}
+                  className={`px-5 py-2.5 rounded-lg text-white font-bold shadow-md transition cursor-pointer flex items-center justify-center gap-2 ${
+                    pontoCopied ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-500 hover:bg-amber-600'
+                  }`}
+                >
+                  {pontoCopied ? <Check size={18} /> : <Copy size={18} />}
+                  {pontoCopied ? 'O.S Copiada!' : 'Copiar O.S de Ponto Adicional'}
                 </button>
               </div>
             </motion.div>

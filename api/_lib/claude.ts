@@ -393,7 +393,6 @@ export async function extractWithFailover(base64Data: string, mimeType: string) 
         {
           model,
           max_tokens: 8192,
-          temperature: 0, // leitura de tabela: sem criatividade
           tools: [EXTRACT_TOOL],
           tool_choice: { type: "tool", name: EXTRACT_TOOL.name },
           messages: [

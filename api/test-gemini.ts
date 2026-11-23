@@ -1,4 +1,4 @@
-import { pingWithFailover, errorPayload } from "./_lib/gemini.js";
+import { pingWithFailover, errorPayload } from "./_lib/claude.js";
 
 export default async function handler(_req: any, res: any) {
   res.setHeader("Content-Type", "application/json");

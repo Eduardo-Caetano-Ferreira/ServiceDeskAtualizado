@@ -263,7 +263,7 @@ export function AtualizarRota() {
         const testPayload = {
           success: true,
           status: 'online',
-          model: result.model || 'gemini-3.1-flash-lite',
+          model: result.model || 'claude-haiku-5-5',
           latencyMs: result.latencyMs,
           timestamp: result.timestamp || new Date().toISOString()
         };
@@ -282,7 +282,7 @@ export function AtualizarRota() {
         throw new Error(friendlyError(result, response.status));
       }
     } catch (err) {
-      console.error("Erro no teste da API Gemini:", err);
+      console.error("Erro no teste da API Claude:", err);
       const errPayload = {
         success: false,
         status: 'error',
@@ -515,7 +515,7 @@ export function AtualizarRota() {
               </div>
               <div>
                 <h2 className="text-sm font-extrabold text-slate-800">Enviar Escala Diária</h2>
-                <p className="text-[11px] text-slate-400">Extração inteligente com IA Gemini</p>
+                <p className="text-[11px] text-slate-400">Extração inteligente com IA Claude</p>
               </div>
             </div>
             <span className="text-[10px] font-extrabold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200">
@@ -601,7 +601,7 @@ export function AtualizarRota() {
             {isUploading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin text-white" />
-                {retryCountdown > 0 ? `IA ocupada, nova tentativa em ${retryCountdown}s...` : 'Extraindo Técnicos com Gemini...'}
+                {retryCountdown > 0 ? `IA ocupada, nova tentativa em ${retryCountdown}s...` : 'Extraindo Técnicos com Claude...'}
               </>
             ) : (
               <>
@@ -778,12 +778,12 @@ export function AtualizarRota() {
               {isTestingGemini ? (
                 <>
                   <RefreshCw className="w-3.5 h-3.5 animate-spin text-red-600" />
-                  Testando Conexão com Gemini...
+                  Testando Conexão com Claude...
                 </>
               ) : (
                 <>
                   <Zap className="w-3.5 h-3.5 text-amber-500" />
-                  Testar Comunicação Gemini
+                  Testar Comunicação Claude
                 </>
               )}
             </button>

@@ -7,7 +7,7 @@ import {
   pingWithFailover,
   readImagePayload,
   errorPayload,
-} from "./api/_lib/gemini.js";
+} from "./api/_lib/claude.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
 

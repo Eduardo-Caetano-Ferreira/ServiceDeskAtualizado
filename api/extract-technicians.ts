@@ -1,4 +1,4 @@
-import { extractWithFailover, readImagePayload, errorPayload } from "./_lib/gemini.js";
+import { extractWithFailover, readImagePayload, errorPayload } from "./_lib/claude.js";
 
 export default async function handler(req: any, res: any) {
   res.setHeader("Content-Type", "application/json");

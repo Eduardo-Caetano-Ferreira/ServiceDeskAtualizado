@@ -1,17 +1,14 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import Anthropic from "@anthropic-ai/sdk";
 
-// Módulo único de acesso ao Gemini com failover.
+// Módulo único de acesso ao Claude (API da Anthropic) com failover.
 // Usado por api/extract-technicians.ts, api/test-gemini.ts e server.ts.
 //
 // Cadeia: para cada chave -> para cada modelo -> até 2 tentativas (retry só em erro transitório).
-// Modelos podem ser trocados sem deploy de código via GEMINI_MODELS="a,b,c".
+// Modelos podem ser trocados sem deploy de código via CLAUDE_MODELS="a,b,c".
 
 export const DEFAULT_MODELS = [
-  "gemini-3.1-flash-lite",
-  "gemini-3.8-flash",
-  "gemini-2.5-flash",
-  "gemini-2.5-pro",
-  "gemini-flash-latest",
+  "claude-haiku-5-5", // rápido e barato, suficiente para ler tabela
+  "claude-sonnet-5-5", // fallback mais forte
 ];
 
 const ATTEMPT_TIMEOUT_MS = 20_000;
@@ -34,7 +31,7 @@ export type ErrorKind =
   | "next-key" // 401/403: chave ruim
   | "bad-model" // 404: modelo inexistente
   | "backoff" // 429
-  | "retry" // 5xx / timeout / rede
+  | "retry" // 5xx / 529 (overloaded) / timeout / rede
   | "invalid-output" // resposta sem JSON/schema válido
   | "empty"; // resposta válida, mas sem nenhum técnico
 
@@ -60,13 +57,13 @@ export type TechData = { moto: Technician[]; car: Technician[] };
 
 export function getApiKeys(): string[] {
   // Somente variáveis de servidor. NÃO ler VITE_* (vai para o bundle do front).
-  return [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2]
+  return [process.env.ANTHROPIC_API_KEY, process.env.ANTHROPIC_API_KEY_2]
     .map((k) => (k || "").trim())
     .filter(Boolean);
 }
 
 export function getModels(): string[] {
-  const fromEnv = (process.env.GEMINI_MODELS || "")
+  const fromEnv = (process.env.CLAUDE_MODELS || "")
     .split(",")
     .map((m) => m.trim())
     .filter(Boolean);
@@ -105,8 +102,8 @@ function errorStatus(e: any): number | undefined {
   const msg = String(e?.message || "");
   const m = msg.match(/\b(400|401|403|404|429|500|502|503|504)\b/);
   if (m) return Number(m[1]);
-  if (/UNAVAILABLE|high demand|overloaded/i.test(msg)) return 503;
-  if (/RESOURCE_EXHAUSTED|quota|rate/i.test(msg)) return 429;
+  if (/overloaded|UNAVAILABLE|high demand/i.test(msg)) return 529;
+  if (/rate.?limit|quota/i.test(msg)) return 429;
   return undefined;
 }
 
@@ -132,6 +129,8 @@ function withTimeout<T>(p: Promise<T>, ms: number, controller: AbortController):
   return Promise.race([p, timeout]).finally(() => clearTimeout(t)) as Promise<T>;
 }
 
+const SUPPORTED_MEDIA = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+
 // ---------- prompt e schema ----------
 const PROMPT = `Você vai ler a imagem de uma escala de técnicos de campo. Ela costuma ter duas tabelas: "TÉCNICOS DE MOTO" e "TÉCNICOS DE CARRO".
 Cada tabela tem colunas como: Técnico | Região de atendimento | Cidade | Observações.
@@ -149,28 +148,31 @@ Regras:
 - Use "" (string vazia) apenas quando a célula realmente estiver vazia na imagem.
 - Se uma tabela não existir, retorne o array vazio [] para ela.
 
-Retorne EXCLUSIVAMENTE o JSON no formato do schema.`;
+Chame a ferramenta registrar_escala com os dados lidos.`;
 
 const techItem = {
-  type: Type.OBJECT,
+  type: "object",
   properties: {
-    name: { type: Type.STRING, description: 'Coluna "Técnico"' },
-    region: { type: Type.STRING, description: 'Coluna "Região de atendimento"' },
-    city: { type: Type.STRING, description: 'Coluna "Cidade" (obrigatória quando houver valor na linha)' },
-    obs: { type: Type.STRING, description: 'Coluna "Observações" ("" se vazia)' },
+    name: { type: "string", description: 'Coluna "Técnico"' },
+    region: { type: "string", description: 'Coluna "Região de atendimento"' },
+    city: { type: "string", description: 'Coluna "Cidade" (obrigatória quando houver valor na linha)' },
+    obs: { type: "string", description: 'Coluna "Observações" ("" se vazia)' },
   },
-  // todos obrigatórios: com só "name" obrigatório o modelo costumava omitir cidade/região
   required: ["name", "region", "city", "obs"],
-  propertyOrdering: ["name", "region", "city", "obs"],
 };
 
-const RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    moto: { type: Type.ARRAY, items: techItem },
-    car: { type: Type.ARRAY, items: techItem },
+// Saída estruturada via tool use forçado: o Claude devolve o JSON já como objeto.
+const EXTRACT_TOOL = {
+  name: "registrar_escala",
+  description: "Registra os técnicos lidos da imagem da escala.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      moto: { type: "array", items: techItem },
+      car: { type: "array", items: techItem },
+    },
+    required: ["moto", "car"],
   },
-  required: ["moto", "car"],
 };
 
 // ---------- parse + validação ----------
@@ -219,7 +221,7 @@ export function validateTechData(parsed: any): TechData {
 }
 
 // ---------- núcleo do failover ----------
-type CallFn = (ai: GoogleGenAI, model: string, signal: AbortSignal) => Promise<string>;
+type CallFn = (ai: Anthropic, model: string, signal: AbortSignal) => Promise<string>;
 type Handle = (text: string) => any; // lança se inválido (kind invalid-output) / EmptyResult
 
 class EmptyResult extends Error {}
@@ -246,7 +248,7 @@ async function runChain<T>(call: CallFn, handle: (text: string) => T): Promise<{
   if (!keys.length) {
     throw new ExtractError(
       "no-key",
-      "Nenhuma chave GEMINI_API_KEY configurada nas variáveis de ambiente do servidor.",
+      "Nenhuma chave ANTHROPIC_API_KEY configurada nas variáveis de ambiente do servidor.",
       500,
       attempts
     );
@@ -259,7 +261,7 @@ async function runChain<T>(call: CallFn, handle: (text: string) => T): Promise<{
   let weak: { value: T; model: string; count: number } | null = null;
 
   for (let keyIdx = 0; keyIdx < keys.length; keyIdx++) {
-    const ai = new GoogleGenAI({ apiKey: keys[keyIdx] });
+    const ai = new Anthropic({ apiKey: keys[keyIdx], maxRetries: 0 }) // retry é feito aqui;
     let keyDead = false;
 
     for (const model of models) {
@@ -325,7 +327,7 @@ async function runChain<T>(call: CallFn, handle: (text: string) => T): Promise<{
           const { kind, status } = classify(e);
           const message = String(e?.message || e).slice(0, 300);
           attempts.push({ model, keyIdx, ok: false, kind, status, ms, error: message });
-          console.warn(`[gemini] ${model} (chave ${keyIdx + 1}) falhou [${kind}${status ? " " + status : ""}]: ${message}`);
+          console.warn(`[claude] ${model} (chave ${keyIdx + 1}) falhou [${kind}${status ? " " + status : ""}]: ${message}`);
 
           if (kind === "abort") {
             throw new ExtractError("abort", message, 400, attempts);
@@ -369,7 +371,7 @@ async function runChain<T>(call: CallFn, handle: (text: string) => T): Promise<{
   if (!sawNonAuthError && attempts.length && attempts.every((a) => a.kind === "next-key")) {
     throw new ExtractError(
       "exhausted",
-      "Chave da API rejeitada (401/403). Verifique GEMINI_API_KEY.",
+      "Chave da API rejeitada (401/403). Verifique ANTHROPIC_API_KEY.",
       502,
       attempts
     );
@@ -386,22 +388,28 @@ async function runChain<T>(call: CallFn, handle: (text: string) => T): Promise<{
 export async function extractWithFailover(base64Data: string, mimeType: string) {
   const { value, model, attempts, latencyMs } = await runChain<TechData>(
     async (ai, model, signal) => {
-      const res = await ai.models.generateContent({
-        model,
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: PROMPT }, { inlineData: { data: base64Data, mimeType } }],
-          },
-        ],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: RESPONSE_SCHEMA,
+      const mt = SUPPORTED_MEDIA.has(mimeType) ? mimeType : "image/jpeg";
+      const res = await ai.messages.create(
+        {
+          model,
+          max_tokens: 8192,
           temperature: 0, // leitura de tabela: sem criatividade
-          abortSignal: signal,
+          tools: [EXTRACT_TOOL],
+          tool_choice: { type: "tool", name: EXTRACT_TOOL.name },
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "image", source: { type: "base64", media_type: mt as any, data: base64Data } },
+                { type: "text", text: PROMPT },
+              ],
+            },
+          ],
         },
-      });
-      return res.text || "";
+        { signal }
+      );
+      const block: any = res.content.find((c: any) => c.type === "tool_use");
+      return block ? JSON.stringify(block.input) : "";
     },
     (text) => {
       const data = validateTechData(parseJson(text));
@@ -417,12 +425,11 @@ export async function extractWithFailover(base64Data: string, mimeType: string) 
 export async function pingWithFailover() {
   const { model, attempts, latencyMs } = await runChain<string>(
     async (ai, model, signal) => {
-      const res = await ai.models.generateContent({
-        model,
-        contents: "Responda apenas com a palavra OK",
-        config: { abortSignal: signal },
-      });
-      return res.text || "";
+      const res = await ai.messages.create(
+        { model, max_tokens: 16, messages: [{ role: "user", content: "Responda apenas com a palavra OK" }] },
+        { signal }
+      );
+      return res.content.map((c: any) => (c.type === "text" ? c.text : "")).join("");
     },
     (text) => text
   );

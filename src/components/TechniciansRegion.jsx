@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Clock, Settings, Search, X, MapPin } from 'lucide-react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { formatMapChange } from '../lib/useMapAutoSync';
 
 export function TechniciansRegion() {
   const [showTechs, setShowTechs] = useState(false);
@@ -11,6 +12,7 @@ export function TechniciansRegion() {
     moto: [], 
     car: [], 
     updatedAt: null, 
+    mapChange: null,
     statusText: 'NORMAL', 
     statusColor: 'green' 
   });
@@ -28,6 +30,7 @@ export function TechniciansRegion() {
           moto: Array.isArray(d.moto) ? d.moto : [],
           car: Array.isArray(d.car) ? d.car : [],
           updatedAt: d.updatedAt || null,
+          mapChange: formatMapChange(d.mapChangedAt, d.mapChangedBy),
           statusText: d.statusText || 'NORMAL',
           statusColor: d.statusColor || 'green'
         });
@@ -130,6 +133,12 @@ export function TechniciansRegion() {
             <Clock size={11} className="text-slate-500" />
             {formatLastUpdate(techData.updatedAt)}
           </span>
+
+          {techData.mapChange && (
+            <span className="text-[10px] font-bold bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200 tracking-wider flex items-center gap-1" title="Última alteração feita no site do mapa">
+              Mapa alterado em {techData.mapChange}
+            </span>
+          )}
 
           {/* Status dinâmico */}
           {(() => {

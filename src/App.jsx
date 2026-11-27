@@ -18,6 +18,7 @@ import { OperatorModal } from './components/OperatorModal';
 import { SHORTCUT_BY_CODE, PAGES } from './lib/navConfig';
 import { useMediaQuery } from './lib/useMediaQuery';
 import { usePwaUpdate } from './lib/pwa';
+import { useMapAutoSync } from './lib/useMapAutoSync';
 
 // Telas cujo primeiro campo é busca/filtro: não recebem foco automático
 const NO_AUTOFOCUS_PAGES = ['home', 'consulta_ceps', 'scripts_chat', 'atualizar_rota', 'changelog'];
@@ -56,6 +57,8 @@ function AppContent() {
     setDrawerOpen(false);
   };
   const { updateReady, applyUpdate } = usePwaUpdate();
+  // Mantém a escala igual à do site do mapa: consulta a cada minuto e grava só se algo mudou
+  useMapAutoSync();
 
   // Controle de recolhimento da barra lateral
   const [isCollapsed, setIsCollapsed] = useState(() => {

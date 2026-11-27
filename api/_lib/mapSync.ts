@@ -29,8 +29,9 @@ export async function fetchScaleFromMap(workDate?: string) {
   const input = {
     "0": { json: { workDate: date } },
     "1": { json: null, meta: { values: ["undefined"] } },
+    "2": { json: null, meta: { values: ["undefined"] } },
   };
-  const url = `${MAP_BASE}/api/trpc/serviceScale.list,neighborhoods.list?batch=1&input=${encodeURIComponent(JSON.stringify(input))}`;
+  const url = `${MAP_BASE}/api/trpc/serviceScale.list,neighborhoods.list,neighborhoods.activity?batch=1&input=${encodeURIComponent(JSON.stringify(input))}`;
 
   let res: Response;
   try {
@@ -42,11 +43,15 @@ export async function fetchScaleFromMap(workDate?: string) {
 
   let scale: any[];
   let neighborhoods: any[];
+  let activity: any[] = [];
   try {
     const body: any = await res.json();
     scale = body[0].result.data.json;
     neighborhoods = body[1].result.data.json;
     if (!Array.isArray(scale) || !Array.isArray(neighborhoods)) throw new Error("formato");
+    // O histórico é opcional: se falhar, a sincronização segue sem "quem/quando".
+    const act = body[2]?.result?.data?.json;
+    if (Array.isArray(act)) activity = act;
   } catch {
     throw new MapSyncError("map-format", "O formato da API do mapa mudou. Use o upload de imagem (plano B).");
   }
@@ -76,9 +81,40 @@ export async function fetchScaleFromMap(workDate?: string) {
     (s.vehicle === "moto" ? moto : car).push(item);
   }
 
-  return { moto, car, faixas, workDate: date, source: "mapa-etecc" };
+  const change = latestRelevantChange(activity, date);
+  const fingerprint = hashString(JSON.stringify({ moto, car, date }));
+
+  return { moto, car, faixas, workDate: date, source: "mapa-etecc", fingerprint, change };
 }
 
+
+// Última alteração no mapa que pode mudar a escala de hoje: salvar a escala do dia ou mexer
+// em bairros/técnicos. Modelos de escala padrão e vendedores PAP não entram.
+function latestRelevantChange(activity: any[], date: string) {
+  const ignored = new Set(["scale_template_created", "scale_template_deleted", "vendor_created", "vendor_deleted"]);
+  const relevant = activity
+    .filter((a) => (a.action === "scale_saved" ? a.neighborhoodName === `Escala ${date}` : !ignored.has(a.action)))
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  const a = relevant[0];
+  if (!a) return null;
+  return {
+    id: a.id,
+    at: a.createdAt as string,
+    by: (a.actorName as string) || null,
+    action: a.action as string,
+    target: (a.neighborhoodName as string) || null,
+  };
+}
+
+function hashString(str: string) {
+  // FNV-1a 32 bits: basta para detectar mudança de conteúdo
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16);
+}
 
 // ---------------------------------------------------------------------------
 // Divisão de território — port fiel do cálculo que o site do mapa faz no navegador.

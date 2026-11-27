@@ -22,6 +22,7 @@ import {
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { Undo2, CheckCircle2, XCircle } from 'lucide-react';
 import { db } from '../lib/firebase';
+import { formatMapChange } from '../lib/useMapAutoSync';
 
 export function AtualizarRota() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -63,7 +64,11 @@ export function AtualizarRota() {
     geminiLastSync: null,
     geminiStatus: null,
     geminiModel: null,
-    geminiLatencyMs: null
+    geminiLatencyMs: null,
+    source: null,
+    syncMode: null,
+    mapChangedAt: null,
+    mapChangedBy: null
   });
 
   useEffect(() => {
@@ -78,7 +83,11 @@ export function AtualizarRota() {
           // Sem valor padrão "online": só mostra online se houve sincronização/teste real
           geminiStatus: docData.geminiStatus || null,
           geminiModel: docData.geminiModel || null,
-          geminiLatencyMs: docData.geminiLatencyMs || null
+          geminiLatencyMs: docData.geminiLatencyMs || null,
+          source: docData.source || null,
+          syncMode: docData.syncMode || null,
+          mapChangedAt: docData.mapChangedAt || null,
+          mapChangedBy: docData.mapChangedBy || null
         });
       }
     });
@@ -312,7 +321,8 @@ export function AtualizarRota() {
         car: Array.isArray(parsed.car) ? parsed.car : [],
         modelUsed: null,
         latencyMs: null,
-        source: 'mapa'
+        source: 'mapa',
+        map: { fingerprint: parsed.fingerprint || null, workDate: parsed.workDate || null, change: parsed.change || null }
       });
     } catch (err) {
       setError(err.message || 'Erro ao consultar o site do mapa. Use o upload de imagem.');
@@ -435,7 +445,15 @@ export function AtualizarRota() {
         geminiLastSync: nowIso,
         geminiStatus: 'online',
         geminiModel: pending.modelUsed || (pending.source === 'mapa' ? 'mapa-etecc' : null),
-        geminiLatencyMs: pending.latencyMs
+        geminiLatencyMs: pending.latencyMs,
+        // Origem da escala: o fingerprint evita que a sincronização automática regrave a mesma versão
+        source: pending.source === 'mapa' ? 'mapa' : 'imagem',
+        syncMode: 'manual',
+        mapFingerprint: pending.map?.fingerprint || null,
+        mapWorkDate: pending.map?.workDate || null,
+        mapChangedAt: pending.map?.change?.at || null,
+        mapChangedBy: pending.map?.change?.by || null,
+        mapChangeAction: pending.map?.change?.action || null
       }, { merge: true });
 
       const syncObj = {
@@ -776,6 +794,25 @@ export function AtualizarRota() {
                   {formatDateTime(lastSyncTimestamp)}
                 </span>
               </div>
+
+              {data.source === 'mapa' && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 font-medium">Origem:</span>
+                    <span className="font-bold text-emerald-700 text-[11px]">
+                      Mapa ETECC · {data.syncMode === 'automatica' ? 'automática' : 'manual'}
+                    </span>
+                  </div>
+                  {formatMapChange(data.mapChangedAt, data.mapChangedBy) && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-slate-500 font-medium shrink-0">Alterada no mapa:</span>
+                      <span className="font-bold text-slate-800 text-[11px] text-right">
+                        {formatMapChange(data.mapChangedAt, data.mapChangedBy)}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
 
               {(data.geminiLatencyMs || geminiTestResult?.latencyMs) && (
                 <div className="flex items-center justify-between">

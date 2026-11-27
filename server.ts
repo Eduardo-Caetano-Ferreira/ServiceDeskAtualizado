@@ -9,7 +9,9 @@ import {
   errorPayload,
 } from "./api/_lib/claude.js";
 
-const upload = multer({ storage: multer.memoryStorage() });
+import { fetchScaleFromMap, mapErrorPayload } from "./api/_lib/mapSync.js";
+
+const upload =multer({ storage: multer.memoryStorage() });
 
 async function startServer() {
   const app = express();
@@ -33,6 +35,18 @@ async function startServer() {
     } catch (err) {
       const { status, body } = errorPayload(err);
       res.status(status).json({ success: false, status: "error", timestamp: new Date().toISOString(), ...body });
+    }
+  });
+
+  // Escala diária direto do site do mapa (sem IA)
+  app.get("/api/sync-map", async (req, res) => {
+    try {
+      const date = typeof req.query.date === "string" ? req.query.date : undefined;
+      res.json(await fetchScaleFromMap(date));
+    } catch (err) {
+      const { status, body } = mapErrorPayload(err);
+      console.error("[sync-map] falhou:", JSON.stringify(body));
+      res.status(status).json(body);
     }
   });
 

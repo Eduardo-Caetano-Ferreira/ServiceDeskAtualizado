@@ -6,12 +6,19 @@
     },
     "api/test-gemini.ts": {
       "maxDuration": 60
+    },
+    "api/sync-map.ts": {
+      "maxDuration": 30
     }
   },
   "rewrites": [
     {
       "source": "/api/extract-technicians",
       "destination": "/api/extract-technicians"
+    },
+    {
+      "source": "/api/sync-map",
+      "destination": "/api/sync-map"
     },
     {
       "source": "/api/test-gemini",

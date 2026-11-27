@@ -50,6 +50,7 @@ export function AtualizarRota() {
   // Resultado extraído aguardando confirmação do operador (não grava até confirmar)
   const [pending, setPending] = useState(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   // Última escala válida (backup para "Desfazer")
   const [previous, setPrevious] = useState(null);
   const [lastAttempts, setLastAttempts] = useState([]);
@@ -296,6 +297,30 @@ export function AtualizarRota() {
     }
   };
 
+  // Método principal: busca a escala do dia direto do site do mapa (sem IA)
+  const handleSyncMap = async () => {
+    setIsSyncing(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/sync-map');
+      const parsed = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error((parsed.details || `Erro ${response.status} ao consultar o mapa.`) + (parsed.kind === 'empty' ? '' : ' Você pode usar o upload de imagem abaixo.'));
+      }
+      setPending({
+        moto: Array.isArray(parsed.moto) ? parsed.moto : [],
+        car: Array.isArray(parsed.car) ? parsed.car : [],
+        modelUsed: null,
+        latencyMs: null,
+        source: 'mapa'
+      });
+    } catch (err) {
+      setError(err.message || 'Erro ao consultar o site do mapa. Use o upload de imagem.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleUpload = async () => {
     if (!selectedFile) {
       setError("Por favor, selecione uma imagem de escala primeiro.");
@@ -409,7 +434,7 @@ export function AtualizarRota() {
         updatedAt: nowIso,
         geminiLastSync: nowIso,
         geminiStatus: 'online',
-        geminiModel: pending.modelUsed,
+        geminiModel: pending.modelUsed || (pending.source === 'mapa' ? 'mapa-etecc' : null),
         geminiLatencyMs: pending.latencyMs
       }, { merge: true });
 
@@ -515,13 +540,37 @@ export function AtualizarRota() {
               </div>
               <div>
                 <h2 className="text-sm font-extrabold text-slate-800">Enviar Escala Diária</h2>
-                <p className="text-[11px] text-slate-400">Extração inteligente com IA Claude</p>
+                <p className="text-[11px] text-slate-400">Direto do site do mapa ou por imagem (IA)</p>
               </div>
             </div>
             <span className="text-[10px] font-extrabold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200">
               Ctrl + V
             </span>
           </div>
+
+          {/* MÉTODO PRINCIPAL: sincronizar com o site do mapa */}
+          <button
+            onClick={handleSyncMap}
+            disabled={isSyncing || isUploading}
+            className={`w-full py-3 px-4 rounded-xl font-black text-xs uppercase tracking-wider flex justify-center items-center gap-2 transition-all shadow-sm ${
+              isSyncing || isUploading
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md hover:shadow-lg active:scale-[0.99]'
+            }`}
+          >
+            {isSyncing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Buscando escala no mapa...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4" />
+                Sincronizar escala de hoje com o mapa
+              </>
+            )}
+          </button>
+          <p className="text-[10px] text-slate-400 text-center -mt-2">Plano B: envie o print da escala abaixo</p>
 
           {/* ÁREA DE DRAG & DROP / PREVIEW */}
           <div 
@@ -622,7 +671,7 @@ export function AtualizarRota() {
                 <CheckCircle2 className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
                 <div className="text-[11px] text-slate-700 leading-relaxed">
                   <p className="font-extrabold text-slate-800 text-xs">Revise antes de publicar</p>
-                  A IA encontrou <strong>{pending.moto.length} de moto</strong> e <strong>{pending.car.length} de carro</strong>
+                  {pending.source === 'mapa' ? 'O mapa trouxe' : 'A IA encontrou'} <strong>{pending.moto.length} de moto</strong> e <strong>{pending.car.length} de carro</strong>
                   {pending.modelUsed ? <> (modelo <span className="font-mono">{pending.modelUsed}</span>)</> : null}.
                   {totalCount > 0 && (
                     <> A escala atual ({data.moto.length} moto / {data.car.length} carro) será substituída, com backup para desfazer.</>
